@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+/.pnp
+.next/
+out/
+build/
+
+# Local environment
+.env*.local
+.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Ide/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Other
+.vercel
+.turbo

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Voice PoC</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #f5f5f5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
+    padding: 20px;
+  }
+  h1 { font-size: 1.4em; margin-bottom: 24px; color: #333; }
+  #status {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  #btn {
+    width: 120px;
+    height: 120px;
+    border-radius: 60px;
+    border: none;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #btn.idle { background: #22c55e; color: white; }
+  #btn.connecting { background: #f59e0b; color: white; }
+  #btn.connected { background: #ef4444; color: white; }
+  #transcript {
+    margin-top: 24px;
+    width: 100%;
+    max-width: 400px;
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 0.85em;
+    line-height: 1.5;
+    min-height: 100px;
+    color: #333;
+    word-wrap: break-word;
+  }
+  .entry { margin-bottom: 8px; }
+  .entry.user { color: #2563eb; }
+  .entry.ai { color: #16a34a; }
+  .entry.partial { font-style: italic; opacity: 0.7; }
+</style>
+</head>
+<body>
+<h1>AI Voice Test</h1>
+<div id="status">Tryk Start for at tale</div>
+<button id="btn" class="idle">Start</button>
+<div id="transcript"></div>
+
+<script>
+const btn = document.getElementById("btn");
+const statusEl = document.getElementById("status");
+const transcript = document.getElementById("transcript");
+
+let pc = null;
+let dc = null;
+let audioEl = null;
+
+function logEntry(role, text, partial) {
+  const div = document.createElement("div");
+  div.className = "entry " + role + (partial ? " partial" : "");
+  div.textContent = (role === "user" ? "Du: " : "AI: ") + text;
+  if (partial && transcript.lastChild?.className === div.className) {
+    transcript.lastChild.textContent = div.textContent;
+  } else {
+    transcript.appendChild(div);
+  }
+  transcript.scrollTop = transcript.scrollHeight;
+}
+
+function setState(state) {
+  btn.className = state;
+  if (state === "idle") { btn.textContent = "Start"; statusEl.textContent = "Tryk Start for at tale"; }
+  else if (state === "connecting") { btn.textContent = "..."; statusEl.textContent = "Forbinder..."; }
+  else if (state === "connected") { btn.textContent = "Stop"; statusEl.textContent = "Tal med AI'en"; }
+}
+
+btn.addEventListener("click", async () => {
+  if (pc) {
+    if (dc) dc.close();
+    pc.close();
+    pc = null; dc = null;
+    if (audioEl) { audioEl.pause(); audioEl = null; }
+    setState("idle");
+    transcript.innerHTML = "";
+    return;
+  }
+
+  setState("connecting");
+
+  try {
+    pc = new RTCPeerConnection();
+
+    audioEl = document.createElement("audio");
+    audioEl.autoplay = true;
+    pc.ontrack = (e) => { audioEl.srcObject = e.streams[0]; };
+
+    const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
+    pc.addTrack(ms.getTracks()[0]);
+
+    dc = pc.createDataChannel("oai-events");
+    dc.onopen = () => {
+      dc.send(JSON.stringify({
+        type: "session.update",
+        session: {
+          instructions: `Du er en professionel dansk telefondame for en håndværksvirksomhed. Du svarer venligt og hjælpsomt på dansk. Spørg kunden hvad problemet er og om det er akut. Svar på almindelige spørgsmål om priser og tilgængelighed. Hold samtalen kort og professionel.`,
+          turn_detection: { type: "server_vad" },
+          input_audio_transcription: { model: "whisper-1" },
+        },
+      }));
+    };
+
+    pc.ondatachannel = (e) => {
+      const channel = e.channel;
+      channel.onmessage = (msg) => {
+        const event = JSON.parse(msg.data);
+        switch (event.type) {
+          case "response.audio_transcript.delta":
+            logEntry("ai", event.delta, true);
+            break;
+          case "response.audio_transcript.done":
+            logEntry("ai", event.transcript, false);
+            break;
+          case "conversation.item.input_audio_transcription.completed":
+            logEntry("user", event.transcript, false);
+            break;
+          case "error":
+            logEntry("ai", "Fejl: " + event.error.message, false);
+            break;
+        }
+      };
+    };
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    const sdpResponse = await fetch("/session", {
+      method: "POST",
+      body: offer.sdp,
+      headers: { "Content-Type": "application/sdp" },
+    });
+
+    if (!sdpResponse.ok) {
+      const err = await sdpResponse.text();
+      throw new Error("Server: " + err);
+    }
+
+    await pc.setRemoteDescription({
+      type: "answer",
+      sdp: await sdpResponse.text(),
+    });
+
+    setState("connected");
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = "Fejl: " + err.message;
+    if (dc) dc.close();
+    if (pc) pc.close();
+    pc = null; dc = null;
+    setState("idle");
+  }
+});
+</script>
+</body>
+</html>
