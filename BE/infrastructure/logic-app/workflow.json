@@ -1,0 +1,139 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "$connections": {
+      "defaultValue": {},
+      "type": "Object"
+    }
+  },
+  "triggers": {
+    "When_a_blob_is_created_in_uploads": {
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['azureeventgrid']['connectionId']"
+          }
+        },
+        "method": "post",
+        "path": "/subscriptions/@encodeURIComponent('__SUB_ID__')/providers/@encodeURIComponent('Microsoft.Storage.StorageAccounts')/resource/@encodeURIComponent('__STORAGE_NAME__')/events/@encodeURIComponent('Microsoft.Storage.BlobCreated')"
+      },
+      "recurrence": {
+        "frequency": "Minute",
+        "interval": 3
+      }
+    }
+  },
+  "actions": {
+    "Get_file_from_uploads": {
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['azureblob']['connectionId']"
+          }
+        },
+        "method": "get",
+        "path": "/datasets/default/GetFileByPath",
+        "queries": {
+          "path": "@{triggerOutputs()?['body']['subject']}"
+        }
+      },
+      "runAfter": {}
+    },
+    "Analyze_with_Document_Intelligence": {
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['formrecognizer']['connectionId']"
+          }
+        },
+        "method": "post",
+        "body": "@body('Get_file_from_uploads')",
+        "path": "/connectorinternaldocumentintelligence/documentModels/@{encodeURIComponent('prebuilt-layout')}:analyze",
+        "queries": {
+          "api-version": "2024-11-30"
+        }
+      },
+      "runAfter": {
+        "Get_file_from_uploads": ["Succeeded"]
+      }
+    },
+    "Store_raw_analysis": {
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['azureblob']['connectionId']"
+          }
+        },
+        "method": "put",
+        "body": "@body('Analyze_with_Document_Intelligence')",
+        "path": "/datasets/default/UpdateFile",
+        "queries": {
+          "path": "/documents/@{outputs('Extract_file_name')}/analysis.json"
+        }
+      },
+      "runAfter": {
+        "Analyze_with_Document_Intelligence": ["Succeeded"]
+      }
+    },
+    "Extract_file_name": {
+      "type": "Compose",
+      "inputs": "@first(split(last(split(triggerOutputs()?['body']['subject'], '/')), '.'))",
+      "runAfter": {
+        "Analyze_with_Document_Intelligence": ["Succeeded"]
+      }
+    },
+    "Create_HTML_report": {
+      "type": "Compose",
+      "inputs": "<!DOCTYPE html><html lang=\"da\"><head><meta charset=\"utf-8\"><title>Workslip rapport - @{outputs('Extract_file_name')}</title><style>body{font-family:system-ui,-apple-system,sans-serif;max-width:960px;margin:40px auto;padding:0 20px;color:#1a1a1a;line-height:1.6}h1{color:#1a3a5c;border-bottom:3px solid #2563eb;padding-bottom:10px}.meta{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:20px 0}.meta dt{font-weight:600;color:#475569;font-size:.85rem;text-transform:uppercase;letter-spacing:.5px}.meta dd{margin:0 0 10px 0}.meta dd:last-child{margin-bottom:0}h2{color:#1e3a5f;margin-top:32px;margin-bottom:8px}.content-box{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:20px;white-space:pre-wrap;word-wrap:break-word;font-family:Georgia,serif;font-size:1rem;line-height:1.7;max-height:800px;overflow-y:auto}.table-list{list-style:none;padding:0;display:grid;gap:24px}.table-card{border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}.table-card h3{background:#f1f5f9;margin:0;padding:10px 16px;font-size:.95rem;color:#334155}.table-card table{border-collapse:collapse;width:100%}.table-card th,.table-card td{border:1px solid #e2e8f0;padding:8px 12px;text-align:left;font-size:.875rem}.table-card th{background:#f8fafc;font-weight:600;color:#475569}.footer{margin-top:48px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:.8rem;color:#94a3b8;text-align:center}</style></head><body><h1>Workslip rapport</h1><dl class=\"meta\"><dt>Filnavn</dt><dd>@{outputs('Extract_file_name')}</dd><dt>Behandlet</dt><dd>@{utcNow('ddd MMM dd yyyy HH:mm:ss')}</dd><dt>Sider</dt><dd>@{length(body('Analyze_with_Document_Intelligence')?['analyzeResult']?['pages'])}</dd><dt>Tabeller fundet</dt><dd>@{length(body('Analyze_with_Document_Intelligence')?['analyzeResult']?['tables'])}</dd></dl><h2>UdtrÃ¦kket indhold</h2><div class=\"content-box\">@{body('Analyze_with_Document_Intelligence')?['analyzeResult']?['content']}</div></body></html>",
+      "runAfter": {
+        "Extract_file_name": ["Succeeded"]
+      }
+    },
+    "Store_HTML_report": {
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['azureblob']['connectionId']"
+          }
+        },
+        "method": "put",
+        "body": "@{outputs('Create_HTML_report')}",
+        "path": "/datasets/default/UpdateFile",
+        "queries": {
+          "path": "/documents/@{outputs('Extract_file_name')}/report.html"
+        }
+      },
+      "runAfter": {
+        "Create_HTML_report": ["Succeeded"]
+      }
+    },
+    "Send_notification_email": {
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['outlook']['connectionId']"
+          }
+        },
+        "method": "post",
+        "body": {
+          "To": "__NOTIFICATION_EMAIL__",
+          "Subject": "Ny workslip behandlet",
+          "Body": "<p>En ny workslip er blevet behandlet.</p><p><b>Fil:</b> @{outputs('Extract_file_name')}</p><p><b>Tid:</b> @{utcNow()}</p>",
+          "Importance": "Normal"
+        },
+        "path": "/v2/Mail"
+      },
+      "runAfter": {
+        "Store_HTML_report": ["Succeeded"]
+      }
+    }
+  },
+  "outputs": {}
+}

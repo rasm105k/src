@@ -1,11 +1,14 @@
 param location string = resourceGroup().location
 param environment string = 'dev'
-param functionAppName string = 'func-docfeeder-${environment}'
-param storageAccountName string = 'stdocfeeder${environment}'
-param logicAppName string = 'la-docprocessor-${environment}'
-param appInsightsName string = 'ai-docfeeder-${environment}'
-param logAnalyticsName string = 'la-docfeeder-${environment}'
-param identityName string = 'id-docfeeder-${environment}'
+param notificationEmail string = ''
+param functionAppName string = 'func-docfeeder-${toLower(environment)}'
+param storageAccountName string = take('stdocfeeder${toLower(environment)}', 24)
+param logicAppName string = 'la-docprocessor-${toLower(environment)}'
+param appInsightsName string = 'ai-docfeeder-${toLower(environment)}'
+param logAnalyticsName string = 'la-docfeeder-${toLower(environment)}'
+param identityName string = 'id-docfeeder-${toLower(environment)}'
+param keyVaultName string = take('kv-docfeeder-${toLower(environment)}', 24)
+param documentIntelligenceName string = 'di-docfeeder-${toLower(environment)}'
 
 var tags = {
   environment: environment
@@ -16,7 +19,7 @@ var tags = {
 // Monitoring
 // ──────────────────────────────────────────────
 
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' = {
   name: logAnalyticsName
   location: location
   tags: tags
@@ -34,7 +37,6 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   properties: {
     Application_Type: 'web'
     WorkspaceResourceId: logAnalytics.id
-    IngestionMode: 'LogAnalytics'
   }
 }
 
@@ -42,66 +44,130 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 // Identity
 // ──────────────────────────────────────────────
 
-resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
   name: identityName
   location: location
   tags: tags
 }
 
 // ──────────────────────────────────────────────
+// Key Vault
+// ──────────────────────────────────────────────
+
+resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' = {
+  name: keyVaultName
+  location: location
+  tags: tags
+  properties: {
+    sku: { name: 'standard', family: 'A' }
+    enableSoftDelete: true
+    enablePurgeProtection: true
+    softDeleteRetentionInDays: 7
+    enableRbacAuthorization: true
+    tenantId: subscription().tenantId
+  }
+}
+
+resource keyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, identity.id, '4633458b-436e-492d-b285-4f6b7b5e48d1')
+  scope: keyVault
+  properties: {
+    principalId: identity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-436e-492d-b285-4f6b7b5e48d1')
+  }
+}
+
+// ──────────────────────────────────────────────
+// Document Intelligence
+// ──────────────────────────────────────────────
+
+resource documentIntelligence 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
+  name: documentIntelligenceName
+  location: location
+  kind: 'FormRecognizer'
+  sku: { name: 'S0' }
+  tags: tags
+  properties: {
+    customSubDomainName: documentIntelligenceName
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource diCognitiveServicesUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(documentIntelligence.id, identity.id, '97f73555-30d5-4b2b-93e6-34f8b6e6f1c2')
+  scope: documentIntelligence
+  properties: {
+    principalId: identity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '97f73555-30d5-4b2b-93e6-34f8b6e6f1c2')
+  }
+}
+
+// ──────────────────────────────────────────────
 // Storage
 // ──────────────────────────────────────────────
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
   name: storageAccountName
   location: location
   kind: 'StorageV2'
   sku: { name: 'Standard_LRS' }
   tags: tags
   properties: {
-    allowBlobPublicAccess: false
     minimumTlsVersion: 'TLS1_2'
     supportsHttpsTrafficOnly: true
+    allowBlobPublicAccess: false
   }
 }
 
-resource uploadsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
-  name: '${storageAccount.name}/default/uploads'
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2022-09-01' = {
+  name: '${storageAccount.name}/default'
+  properties: {
+    deleteRetentionPolicy: { enabled: true, days: 7 }
+  }
 }
 
-resource documentsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
-  name: '${storageAccount.name}/default/documents'
+resource uploadsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01' = {
+  name: '${blobService.name}/uploads'
+}
+
+resource documentsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01' = {
+  name: '${blobService.name}/documents'
 }
 
 // ──────────────────────────────────────────────
 // Function App (Consumption Plan, Linux, .NET)
 // ──────────────────────────────────────────────
 
-resource hostingPlan 'Microsoft.Web/serverfarms@2023-12-01' = {
-  name: 'asp-docfeeder-${environment}'
+resource hostingPlan 'Microsoft.Web/serverfarms@2022-09-01' = {
+  name: 'asp-docfeeder-${toLower(environment)}'
   location: location
   kind: 'linux'
   sku: { name: 'Y1', tier: 'Dynamic' }
   tags: tags
-  properties: { reserved: true }
+  properties: {
+    reserved: true
+  }
 }
 
-resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
+resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
   name: functionAppName
   location: location
   kind: 'functionapp,linux'
   tags: tags
   identity: {
-    type: 'UserAssigned'
+    type: 'SystemAssigned, UserAssigned'
     userAssignedIdentities: { '${identity.id}': {} }
   }
   properties: {
     serverFarmId: hostingPlan.id
     httpsOnly: true
     siteConfig: {
-      linuxFxVersion: 'DOTNET-ISOLATED|10.0'
+      linuxFxVersion: 'DOTNET-ISOLATED|8.0'
       alwaysOn: false
-      use32BitWorkerProcess: false
+      minTlsVersion: '1.2'
+      ftpsState: 'Disabled'
       appSettings: [
         { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'dotnet-isolated' }
         { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
@@ -110,9 +176,10 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'UPLOAD_CONTAINER', value: 'uploads' }
         { name: 'STORAGE_ACCOUNT_NAME', value: storageAccount.name }
         { name: 'AZURE_CLIENT_ID', value: identity.properties.clientId }
+        { name: 'KEY_VAULT_URL', value: keyVault.properties.vaultUri }
+        { name: 'DOCUMENT_INTELLIGENCE_ENDPOINT', value: documentIntelligence.properties.endpoint }
       ]
     }
-    clientAffinityEnabled: false
   }
 }
 
@@ -121,7 +188,7 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
 // ──────────────────────────────────────────────
 
 resource systemTopic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
-  name: 'eg-docfeeder-${environment}'
+  name: 'eg-docfeeder-${toLower(environment)}'
   location: location
   tags: tags
   properties: {
@@ -131,16 +198,16 @@ resource systemTopic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
 }
 
 // ──────────────────────────────────────────────
-// API Connections (shared by Logic App)
+// API Connections (used by Logic App)
 // ──────────────────────────────────────────────
 
 resource blobConnection 'Microsoft.Web/connections@2016-06-01' = {
-  name: 'as-docfeeder-blob-${environment}'
+  name: 'as-docfeeder-blob-${toLower(environment)}'
   location: location
   tags: tags
   properties: {
     displayName: 'Blob Connection'
-    api: { id: subscriptionResourceId('Microsoft.Web/locations/${location}/managedApis', 'azureblob') }
+    api: { id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureblob') }
     parameterValueType: 'Alternative'
     parameterValues: {
       authType: 'ManagedServiceIdentity'
@@ -150,12 +217,42 @@ resource blobConnection 'Microsoft.Web/connections@2016-06-01' = {
 }
 
 resource eventGridConnection 'Microsoft.Web/connections@2016-06-01' = {
-  name: 'as-docfeeder-eg-${environment}'
+  name: 'as-docfeeder-eg-${toLower(environment)}'
   location: location
   tags: tags
   properties: {
     displayName: 'Event Grid Connection'
-    api: { id: subscriptionResourceId('Microsoft.Web/locations/${location}/managedApis', 'azureeventgrid') }
+    api: { id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureeventgrid') }
+    parameterValueType: 'Alternative'
+    parameterValues: {
+      authType: 'ManagedServiceIdentity'
+      identityId: identity.id
+    }
+  }
+}
+
+resource documentIntelligenceConnection 'Microsoft.Web/connections@2016-06-01' = {
+  name: 'as-docfeeder-di-${toLower(environment)}'
+  location: location
+  tags: tags
+  properties: {
+    displayName: 'Document Intelligence Connection'
+    api: { id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'formrecognizer') }
+    parameterValueType: 'Alternative'
+    parameterValues: {
+      authType: 'ManagedServiceIdentity'
+      identityId: identity.id
+    }
+  }
+}
+
+resource outlookConnection 'Microsoft.Web/connections@2016-06-01' = {
+  name: 'as-docfeeder-outlook-${toLower(environment)}'
+  location: location
+  tags: tags
+  properties: {
+    displayName: 'Outlook Connection'
+    api: { id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'outlook') }
     parameterValueType: 'Alternative'
     parameterValues: {
       authType: 'ManagedServiceIdentity'
@@ -166,77 +263,58 @@ resource eventGridConnection 'Microsoft.Web/connections@2016-06-01' = {
 
 // ──────────────────────────────────────────────
 // Logic App (Consumption, Event Grid trigger)
+//
+// The workflow definition is loaded from the
+// workflow.json file at compile time.
+// Placeholders are substituted at deploy time.
 // ──────────────────────────────────────────────
+
+var workflowTemplate = loadTextContent('./logic-app/workflow.json')
+
+var workflowDefinition = json(
+  replace(
+    replace(
+      replace(workflowTemplate, '__SUB_ID__', subscription().subscriptionId),
+      '__STORAGE_NAME__', storageAccountName
+    ),
+    '__NOTIFICATION_EMAIL__',
+    notificationEmail
+  )
+)
 
 resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
   name: logicAppName
   location: location
   tags: tags
   identity: {
-    type: 'UserAssigned'
+    type: 'SystemAssigned, UserAssigned'
     userAssignedIdentities: { '${identity.id}': {} }
   }
   properties: {
     state: 'Enabled'
-    definition: {
-      '$schema': 'https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#'
-      contentVersion: '1.0.0.0'
-      parameters: {
-        '$connections': {
-          defaultValue: {}
-          type: 'Object'
-        }
-      }
-      triggers: {
-        When_a_resource_event_occurs: {
-          type: 'ApiConnection'
-          inputs: {
-            host: {
-              connection: {
-                name: '@parameters(''$connections'')[''azureeventgrid''][''connectionId'']'
-              }
-            }
-            method: 'post'
-            path: '/subscriptions/@encodeURIComponent(''${subscription().subscriptionId}'')/providers/@encodeURIComponent(''Microsoft.Storage.StorageAccounts'')/resource/@encodeURIComponent(''${storageAccountName}'')/events/@encodeURIComponent(''Microsoft.Storage.BlobCreated'')'
-          }
-          recurrence: {
-            frequency: 'Minute'
-            interval: 1
-          }
-        }
-      }
-      actions: {
-        Get_blob_content: {
-          type: 'ApiConnection'
-          inputs: {
-            host: {
-              connection: {
-                name: '@parameters(''$connections'')[''azureblob''][''connectionId'']'
-              }
-            }
-            method: 'get'
-            path: '/datasets/default/GetFileByPath'
-            queries: {
-              path: '@{triggerOutputs()?[''body''][''subject'']}'
-            }
-          }
-          runAfter: {}
-        }
-      }
-      outputs: {}
-    }
+    definition: workflowDefinition
     parameters: {
       '$connections': {
         value: {
           azureblob: {
             connectionId: blobConnection.id
             connectionName: 'azureblob'
-            id: subscriptionResourceId('Microsoft.Web/locations/${location}/managedApis', 'azureblob')
+            id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureblob')
           }
           azureeventgrid: {
             connectionId: eventGridConnection.id
             connectionName: 'azureeventgrid'
-            id: subscriptionResourceId('Microsoft.Web/locations/${location}/managedApis', 'azureeventgrid')
+            id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureeventgrid')
+          }
+          formrecognizer: {
+            connectionId: documentIntelligenceConnection.id
+            connectionName: 'formrecognizer'
+            id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'formrecognizer')
+          }
+          outlook: {
+            connectionId: outlookConnection.id
+            connectionName: 'outlook'
+            id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'outlook')
           }
         }
       }
@@ -279,3 +357,6 @@ output MANAGED_IDENTITY_CLIENT_ID string = identity.properties.clientId
 output MANAGED_IDENTITY_PRINCIPAL_ID string = identity.properties.principalId
 output APP_INSIGHTS_CONNECTION_STRING string = appInsights.properties.ConnectionString
 output EVENT_GRID_SYSTEM_TOPIC_ID string = systemTopic.id
+output KEY_VAULT_URI string = keyVault.properties.vaultUri
+output DOCUMENT_INTELLIGENCE_ENDPOINT string = documentIntelligence.properties.endpoint
+output DOCUMENT_INTELLIGENCE_NAME string = documentIntelligenceName

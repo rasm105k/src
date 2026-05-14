@@ -1,0 +1,79 @@
+param(
+    [Parameter(Position=0)]
+    [string]$Environment = "dev",
+
+    [string]$Location = "westeurope"
+)
+
+$ErrorActionPreference = "Stop"
+$RESOURCE_GROUP = "rg-docfeeder-$Environment"
+$INFRA_DIR = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+$TEMPLATE = Join-Path $INFRA_DIR "main.bicep"
+$PARAMETERS = Join-Path $INFRA_DIR "parameters.$Environment.json"
+$DEPLOY_NAME = "docfeeder-$Environment-$(Get-Date -Format 'yyyyMMddHHmmss')"
+
+# ─── checks ───────────────────────────────────────────
+if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
+    Write-Error "Azure CLI not found. Install from https://aka.ms/installazurecliwindows"
+    exit 1
+}
+if (-not (Test-Path $TEMPLATE)) {
+    Write-Error "Template not found at $TEMPLATE"
+    exit 1
+}
+if (-not (Test-Path $PARAMETERS)) {
+    Write-Warning "No parameters file at $PARAMETERS — using defaults"
+}
+
+# ─── login ────────────────────────────────────────────
+Write-Host "`n🔐 Checking Azure login…" -ForegroundColor Cyan
+$account = az account show --query id -o tsv 2>$null
+if (-not $account) {
+    Write-Host "   Not logged in. Starting device login…"
+    az login --use-device-code
+    $account = az account show --query id -o tsv
+}
+Write-Host "   Subscription: $account"
+
+# ─── register providers ───────────────────────────────
+Write-Host "`n📦 Registering resource providers…" -ForegroundColor Cyan
+@("Microsoft.EventGrid", "Microsoft.Web", "Microsoft.Storage",
+  "Microsoft.Logic", "Microsoft.OperationalInsights", "Microsoft.Insights",
+  "Microsoft.KeyVault", "Microsoft.CognitiveServices") | ForEach-Object {
+    $state = az provider show --namespace $_ --query registrationState -o tsv 2>$null
+    if ($state -ne "Registered") {
+        Write-Host "   Registering $_ …"
+        az provider register --namespace $_ --wait
+    } else {
+        Write-Host "   $_ ✅"
+    }
+}
+
+# ─── resource group ───────────────────────────────────
+Write-Host "`n📁 Ensuring resource group…" -ForegroundColor Cyan
+$exists = az group exists --name $RESOURCE_GROUP -o tsv
+if ($exists -eq "false") {
+    az group create --name $RESOURCE_GROUP --location $Location
+    Write-Host "   Created $RESOURCE_GROUP"
+} else {
+    Write-Host "   $RESOURCE_GROUP ✅"
+}
+
+# ─── deploy ───────────────────────────────────────────
+Write-Host "`n🚀 Deploying Bicep template…" -ForegroundColor Cyan
+
+if (Test-Path $PARAMETERS) {
+    az deployment group create `
+        --resource-group $RESOURCE_GROUP `
+        --name $DEPLOY_NAME `
+        --template-file $TEMPLATE `
+        --parameters $PARAMETERS
+} else {
+    az deployment group create `
+        --resource-group $RESOURCE_GROUP `
+        --name $DEPLOY_NAME `
+        --template-file $TEMPLATE
+}
+
+Write-Host "`n✅ Deployment complete: $DEPLOY_NAME" -ForegroundColor Green
+Write-Host "   Resource group: $RESOURCE_GROUP"
