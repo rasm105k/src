@@ -5,7 +5,7 @@ param notificationEmail string = ''
 
 param functionAppName string          = 'func-${companyName}-${toLower(environment)}'
 param storageAccountName string       = take('st${companyName}${toLower(environment)}', 24)
-param logicAppName string             = 'la-docprocessor-${toLower(environment)}'
+param logicAppName string             = 'la-${companyName}-${toLower(environment)}'
 param appInsightsName string          = 'ai-${companyName}-${toLower(environment)}'
 param logAnalyticsName string         = 'law-${companyName}-${toLower(environment)}'
 param identityName string             = 'id-${companyName}-${toLower(environment)}'
@@ -83,12 +83,12 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
 }
 
 resource kvRoleIdentity 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: 'kev-guid(keyVault.id, identity.id, roles.keyVaultSecretsUser)'
+  name: guid('${keyVault.id}${identity.id}${roles.keyVaultSecretsUser}')
   scope: keyVault
   properties: {
     principalId: identity.properties.principalId
     principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.keyVaultSecretsUser)
+    roleDefinitionId: roles.keyVaultSecretsUser
   }
 }
 
@@ -130,7 +130,7 @@ resource documentsContainer 'Microsoft.Storage/storageAccounts/blobServices/cont
 }
 
 resource storageRoleBlob 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: 'hej-guid(storageAccount.id, identity.id, roles.storageBlobContributor)'
+  name: guid('${storageAccount.id}${identity.id}${roles.storageBlobContributor}')
   scope: storageAccount
   properties: {
     principalId: identity.properties.principalId
@@ -141,7 +141,7 @@ resource storageRoleBlob 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
 
 // Required by the Functions runtime when using managed identity for AzureWebJobsStorage
 resource storageRoleQueue 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: 'med-guid(storageAccount.id, identity.id, roles.storageQueueContributor)'
+  name: guid('${storageAccount.id}${identity.id}${roles.storageQueueContributor}')
   scope: storageAccount
   properties: {
     principalId: identity.properties.principalId
@@ -151,7 +151,7 @@ resource storageRoleQueue 'Microsoft.Authorization/roleAssignments@2022-04-01' =
 }
 
 resource storageRoleTable 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: 'dig-guid(storageAccount.id, identity.id, roles.storageTableContributor)'
+  name: guid('${storageAccount.id}${identity.id}${roles.storageTableContributor}')
   scope: storageAccount
   properties: {
     principalId: identity.properties.principalId
@@ -169,15 +169,19 @@ resource documentIntelligence 'Microsoft.CognitiveServices/accounts@2023-05-01' 
   kind: 'FormRecognizer'
   sku: { name: 'S0' }
   tags: tags
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: { '${identity.id}': {} }
+  }
   properties: {
-    restore: true
+    restore: false
     customSubDomainName: documentIntelligenceName
     publicNetworkAccess: 'Enabled'
   }
 }
 
 resource diRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: 'fuck-guid(documentIntelligence.id, identity.id, roles.cognitiveServicesUser)'
+  name: guid('${documentIntelligence.id}${identity.id}${roles.cognitiveServicesUser}')
   scope: documentIntelligence
   properties: {
     principalId: identity.properties.principalId
@@ -235,37 +239,6 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Service Connections
-// ──────────────────────────────────────────────────────────────────────────────
-
-resource blobConnection 'Microsoft.Web/connections@2016-06-01' = {
-  name: 'as-${companyName}-blob-${toLower(environment)}'
-  location: location
-  tags: tags
-  properties: {
-    displayName: 'Blob Connection'
-    api: { id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureblob') }
-    parameterValues: {
-      authType: 'ManagedServiceIdentity'
-      identityId: identity.id
-    }
-  }
-}
-
-resource documentIntelligenceConnection 'Microsoft.Web/connections@2016-06-01' = {
-  name: 'as-${companyName}-di-${toLower(environment)}'
-  location: location
-  tags: tags
-  properties: {
-    displayName: 'Document Intelligence Connection'
-    api: { id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'formrecognizer') }
-    parameterValues: {
-      authType: 'ManagedServiceIdentity'
-      identityId: identity.id
-    }
-  }
-}
 
 
 
@@ -298,22 +271,6 @@ resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
   properties: {
     state: 'Enabled'
     definition: workflowDefinition
-    parameters: {
-      '$connections': {
-        value: {
-          azureblob: {
-            connectionId: blobConnection.id
-            connectionName: 'azureblob'
-            id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureblob')
-          }
-          formrecognizer: {
-            connectionId: documentIntelligenceConnection.id
-            connectionName: 'formrecognizer'
-            id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'formrecognizer')
-          }
-        }
-      }
-    }
   }
 }
 

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { supabase } from "@/lib/supabase";
 
 export default function ContactForm() {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -13,20 +12,29 @@ export default function ContactForm() {
     setErrorMessage("");
 
     const formData = new FormData(event.currentTarget);
-    const fullName = formData.get("full_name") as string;
-    const email = formData.get("email") as string;
-    const message = formData.get("message") as string;
+    const data = {
+      full_name: formData.get("full_name") as string,
+      email: formData.get("email") as string,
+      message: formData.get("message") as string,
+    };
 
-    const { error } = await supabase
-      .from("leads")
-      .insert([{ full_name: fullName, email, message }]);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
 
-    if (error) {
-      console.error("Supabase error:", error);
-      setErrorMessage(error.message || "Something went wrong. Please try again.");
-      setStatus("error");
-    } else {
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Something went wrong");
+      }
+
       setStatus("success");
+    } catch (err) {
+      console.error("Contact error:", err);
+      setErrorMessage(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setStatus("error");
     }
   }
 
