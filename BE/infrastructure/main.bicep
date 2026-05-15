@@ -179,7 +179,7 @@ resource documentIntelligence 'Microsoft.CognitiveServices/accounts@2023-05-01' 
     userAssignedIdentities: { '${identity.id}': {} }
   }
   properties: {
-    restore: true
+    restore: false
     customSubDomainName: documentIntelligenceName
     publicNetworkAccess: 'Enabled'
   }
