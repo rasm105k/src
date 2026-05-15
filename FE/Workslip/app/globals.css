@@ -80,7 +80,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 13px;
+  margin-bottom: 6px;
 }
 
 .back-button {
@@ -111,10 +111,13 @@ button {
   font-weight: 800;
 }
 
-.meta strong {
-  font-size: 13px;
+.doc-title {
+  font-size: 14px;
+  font-weight: 900;
   color: var(--green);
-  font-weight: 850;
+  letter-spacing: -0.01em;
+  margin-bottom: 10px;
+  line-height: 1.2;
 }
 
 .progress {

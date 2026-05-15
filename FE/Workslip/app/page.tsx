@@ -67,7 +67,8 @@ export default function Home() {
   const [selectedControlStages, setSelectedControlStages] = useState<string[]>([]);
   const [controlStepError, setControlStepError] = useState("");
   const [customerInfoExpanded, setCustomerInfoExpanded] = useState(false);
-  const [closure, setClosure] = useState<ClosureFlag[]>(["faerdig", "driftVedligehold", "klarTilFaktura"]);
+  const [closure, setClosure] = useState<ClosureFlag[]>([]);
+  const [closureError, setClosureError] = useState("");
   const [showDescriptionError, setShowDescriptionError] = useState(false);
   const [description, setDescription] = useState("");
 
@@ -138,6 +139,12 @@ export default function Home() {
       }
     }
 
+    if (currentStep === "closure" && closure.length === 0) {
+      setClosureError("Vælg mindst én afslutningsstatus");
+      return;
+    }
+    setClosureError("");
+
     if (currentStep === "done") {
       setCurrentStep("report");
       return;
@@ -174,6 +181,7 @@ export default function Home() {
   }
 
   function toggleClosureFlag(id: ClosureFlag) {
+    setClosureError("");
     setClosure((current) => {
       if (id === "ikkeFaerdig") {
         return current.includes("ikkeFaerdig") ? [] : ["ikkeFaerdig"];
@@ -207,9 +215,9 @@ export default function Home() {
             </button>
             <div className="meta">
               <span>{stepText}</span>
-              <strong>4V05</strong>
             </div>
           </div>
+          <div className="doc-title">4V05-arbejdsrapport</div>
           <div className="progress" aria-hidden="true">
             <span style={{ width: `${progress}%` }} />
           </div>
@@ -460,6 +468,7 @@ export default function Home() {
             </div>
           )}
           {currentStep === "controls" && controlStepError && <p className="bottom-error">{controlStepError}</p>}
+          {currentStep === "closure" && closureError && <p className="bottom-error">{closureError}</p>}
           <div className="bottom-actions">
             <div>
               <span>{stepText}</span>

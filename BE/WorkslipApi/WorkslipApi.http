@@ -1,0 +1,74 @@
+@WorkslipApi_HostAddress = http://localhost:5262
+@ReportId = 00000000-0000-0000-0000-000000000000
+
+GET {{WorkslipApi_HostAddress}}/health
+Accept: application/json
+
+###
+
+POST {{WorkslipApi_HostAddress}}/api/workslips
+Content-Type: application/json
+
+{
+  "organizationId": "11111111-1111-1111-1111-111111111111",
+  "reportNumber": "4V05-001",
+  "customerName": "Aarhus Ejendomme ApS",
+  "customerAddress": "Trojborgvej 12, 8200 Aarhus N",
+  "contactPerson": "Mette Jensen",
+  "phone": "26750981",
+  "reportDate": "2026-05-15",
+  "taskDescription": "Udskiftning og kontrol af vandinstallation.",
+  "customerObservations": null,
+  "installationTypes": ["vand"],
+  "workKind": "reparation",
+  "customWorkKind": null,
+  "remarks": null,
+  "closureFlags": ["faerdig", "klarTilFaktura"],
+  "payload": {
+    "source": "workslip-pwa"
+  },
+  "controlChecks": [
+    {
+      "stageId": "slutkontrol",
+      "columnId": "vand",
+      "itemId": "vand-trykproevning",
+      "checked": true,
+      "note": null
+    }
+  ]
+}
+
+###
+
+GET {{WorkslipApi_HostAddress}}/api/workslips?limit=25&offset=0
+Accept: application/json
+
+###
+
+GET {{WorkslipApi_HostAddress}}/api/workslips/{{ReportId}}
+Accept: application/json
+
+###
+
+PATCH {{WorkslipApi_HostAddress}}/api/workslips/{{ReportId}}
+Content-Type: application/json
+
+{
+  "remarks": "Opdateret fra backoffice",
+  "closureFlags": ["faerdig", "klarTilFaktura"]
+}
+
+###
+
+POST {{WorkslipApi_HostAddress}}/api/workslips/{{ReportId}}/submit
+Accept: application/json
+
+###
+
+POST {{WorkslipApi_HostAddress}}/api/workslips/{{ReportId}}/approve
+Accept: application/json
+
+###
+
+POST {{WorkslipApi_HostAddress}}/api/workslips/{{ReportId}}/reject
+Accept: application/json
