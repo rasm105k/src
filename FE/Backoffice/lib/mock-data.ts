@@ -1,4 +1,4 @@
-import { Workslip, WorkslipStatus, InstallationType, WorkKind, ClosureFlag, ControlStageEntry } from './types'
+import { Workslip, WorkslipStatus, InstallationType, WorkKind, ClosureFlag, ControlStageEntry, CheckedItem } from './types'
 
 const customers = [
   { name: 'Aarhus Ejendomme ApS', address: 'Trøjborgvej 12, 8200 Aarhus N', contact: 'Mette Jensen', phone: '26 75 09 81' },
@@ -45,42 +45,34 @@ const remarksList = [
 
 const technicians = ['Niels Petersen', 'Thomas Mikkelsen', 'Kim Andersen', 'Rasmus Bæk', 'Morten Hjort', 'Lasse Jensen']
 
-const installationTypeLabels: Record<InstallationType, string> = {
+export const installationTypeLabels: Record<InstallationType, string> = {
   gas: 'Gas',
   vand: 'Vand',
   aflob: 'Afløb',
   varme: 'Varme',
 }
 
-const workKindLabels: Record<WorkKind, string> = {
+export const workKindLabels: Record<WorkKind, string> = {
   nyInstallation: 'Ny installation',
   aendring: 'Ændring',
   reparation: 'Reparation',
   serviceAndet: 'Andet',
 }
 
-const closureFlagLabels: Record<ClosureFlag, string> = {
+export const installationToControlColumns: Record<InstallationType, string> = {
+  gas: 'gasVarme',
+  varme: 'gasVarme',
+  vand: 'vand',
+  aflob: 'aflob',
+}
+
+export const closureFlagLabels: Record<ClosureFlag, string> = {
   ikkeFaerdig: 'Ikke færdig',
   faerdig: 'Færdig',
   tegninger: 'Tegninger',
   faerdigmelding: 'Færdigmelding',
   driftVedligehold: 'Drifts- og vedligeholdelsesinstruktioner',
   klarTilFaktura: 'Klar til faktura',
-}
-
-const controlStageDefs = [
-  { id: 'forundersoegelse', title: 'Forundersøgelse', items: { gasVarme: 2, vand: 2, aflob: 4 } },
-  { id: 'modtagekontrol', title: 'Modtagekontrol', items: { gasVarme: 4, vand: 4, aflob: 3 } },
-  { id: 'udfoerelseskontrol', title: 'Udførelseskontrol', items: { gasVarme: 3, vand: 6, aflob: 2 } },
-  { id: 'slutkontrol', title: 'Slutkontrol', items: { gasVarme: 4, vand: 6, aflob: 3 } },
-  { id: 'drift-vedligehold', title: 'Drift og vedligehold', items: { gasVarme: 4, vand: 4, aflob: 4 } },
-]
-
-const installationToControlColumn: Record<InstallationType, string> = {
-  gas: 'gasVarme',
-  varme: 'gasVarme',
-  vand: 'vand',
-  aflob: 'aflob',
 }
 
 function randomItem<T>(arr: T[]): T {
@@ -101,6 +93,155 @@ function randomDate(daysBack: number): string {
   return d.toISOString()
 }
 
+const controlStages = [
+  {
+    id: 'forundersoegelse',
+    title: 'Forundersøgelse',
+    items: {
+      gasVarme: [{ id: 'gas-ansoegning', label: 'Ansøgning på gas' }],
+      vand: [
+        { id: 'vand-ansoegning', label: 'Ansøgning på vand' },
+        { id: 'vandkvalitet', label: 'Vandkvalitet' },
+      ],
+      aflob: [
+        { id: 'aflob-ansoegning', label: 'Ansøgning på afløb' },
+        { id: 'aflob-fald-ledninger-forundersoegelse', label: 'Fald på ledninger' },
+        { id: 'aflob-udluftninger-over-tag', label: 'Udluftninger over tag' },
+        { id: 'aflob-vakuumventiler', label: 'Vakuumventiler' },
+      ],
+    },
+  },
+  {
+    id: 'modtagekontrol',
+    title: 'Modtagekontrol',
+    items: {
+      gasVarme: [
+        { id: 'gas-roer-fittings', label: 'Rør og fittings' },
+        { id: 'gas-armaturer', label: 'Armaturer' },
+        { id: 'gas-kedel-vvb', label: 'Kedel / VVB' },
+        { id: 'gas-saerlige-komponenter', label: 'Særlige komponenter' },
+      ],
+      vand: [
+        { id: 'vand-roer-fittings', label: 'Rør og fittings' },
+        { id: 'vand-armaturer', label: 'Armaturer' },
+        { id: 'vand-vvb-veksler', label: 'VVB / veksler' },
+        { id: 'vand-saerlige-komponenter', label: 'Særlige komponenter' },
+      ],
+      aflob: [
+        { id: 'aflob-roer-fittings', label: 'Rør og fittings' },
+        { id: 'aflob-installationsgenstande-modtage', label: 'Installationsgenstande' },
+        { id: 'aflob-saerlige-komponenter', label: 'Særlige komponenter' },
+      ],
+    },
+  },
+  {
+    id: 'udfoerelseskontrol',
+    title: 'Udførelseskontrol',
+    items: {
+      gasVarme: [
+        { id: 'gas-stikledning-indfoering', label: 'Stikledning og indføring' },
+        { id: 'gas-roerophaeng', label: 'Rørophæng' },
+        { id: 'gas-tilslutning-varmtvand', label: 'Tilslutning til varmtvandsforsyning' },
+      ],
+      vand: [
+        { id: 'vand-stikledning-indfoering', label: 'Stikledning og indføring' },
+        { id: 'vand-fordeler', label: 'Fordeler omløber fastsp.' },
+        { id: 'vand-koblingsdaaser', label: 'Samling af koblingsdåser' },
+        { id: 'vand-tilslutning-varmtvand', label: 'Tilslutning til varmtvandsforsyning' },
+        { id: 'vand-fittings-samlet', label: 'Fittings presset, samlet, loddet.' },
+        { id: 'vand-roer-vater-lod', label: 'Rør i vater og lod' },
+      ],
+      aflob: [
+        { id: 'aflob-installationsgenstande-udfoerelse', label: 'Installationsgenstande' },
+        { id: 'aflob-fald-ledninger-udfoerelse', label: 'Fald på ledninger' },
+      ],
+    },
+  },
+  {
+    id: 'slutkontrol',
+    title: 'Slutkontrol',
+    items: {
+      gasVarme: [
+        { id: 'gas-taethed', label: 'Tæthedsprøvning' },
+        { id: 'gas-funktion', label: 'Funktionsafprøvning' },
+        { id: 'gas-sikkerhedsarmaturer', label: 'Sikkerhedsarmaturer' },
+        { id: 'gas-optaelling-materialer', label: 'Optælling af materialer' },
+      ],
+      vand: [
+        { id: 'vand-trykproevning', label: 'Trykprøvning' },
+        { id: 'vand-tapsteder', label: 'Afprøvning af tapsteder' },
+        { id: 'vand-varmtvandstemp', label: 'Varmtvandstemp.' },
+        { id: 'vand-cirkulation', label: 'Cirkulation' },
+        { id: 'vand-sikkerhedsarmaturer', label: 'Sikkerhedsarmaturer' },
+        { id: 'vand-optaelling-materialer', label: 'Optælling af materialer' },
+      ],
+      aflob: [
+        { id: 'aflob-taethed', label: 'Tæthedsprøvning' },
+        { id: 'aflob-installationsgenstande', label: 'Afprøvning af installationsgenstande' },
+        { id: 'aflob-optaelling-materialer', label: 'Optælling af materialer' },
+      ],
+    },
+  },
+  {
+    id: 'drift-vedligehold',
+    title: 'Drift og vedligehold',
+    items: {
+      gasVarme: [
+        { id: 'gas-driftsinstruktion', label: 'Driftsinstruktion' },
+        { id: 'gas-vedligehold', label: 'Vedligeholdsinstruktion' },
+        { id: 'gas-ventiler', label: 'Ventiler og komponenter' },
+        { id: 'gas-saerlige', label: 'Særlige komponenter' },
+      ],
+      vand: [
+        { id: 'vand-driftsinstruktion', label: 'Driftsinstruktion' },
+        { id: 'vand-vedligehold', label: 'Vedligeholdsinstruktion' },
+        { id: 'vand-ventiler', label: 'Ventiler og armaturer' },
+        { id: 'vand-saerlige', label: 'Særlige komponenter' },
+      ],
+      aflob: [
+        { id: 'aflob-driftsinstruktion', label: 'Driftsinstruktion' },
+        { id: 'aflob-vedligehold', label: 'Vedligeholdsinstruktion' },
+        { id: 'aflob-brugervejledning', label: 'Brugervejledning' },
+        { id: 'aflob-saerlige', label: 'Særlige komponenter' },
+      ],
+    },
+  },
+]
+
+export const controlStageDefs = controlStages.map(s => ({
+  id: s.id,
+  title: s.title,
+  items: s.items as Record<string, Array<{ id: string; label: string }>>,
+}))
+
+function buildControlStages(installations: InstallationType[]): ControlStageEntry[] {
+  const activeColumns: string[] = [...new Set(installations.map(i => installationToControlColumns[i]))]
+
+  return controlStages
+    .filter(stage =>
+      activeColumns.some(col => ((stage.items as any)[col]?.length ?? 0) > 0)
+    )
+    .map(stage => {
+      const allItems: CheckedItem[] = []
+      for (const col of activeColumns) {
+        const items = (stage.items as any)[col] ?? []
+        for (const item of items) {
+          allItems.push({ id: item.id, label: item.label })
+        }
+      }
+      const checkedCount = Math.random() > 0.15 ? allItems.length : Math.max(1, Math.floor(allItems.length * (Math.random() * 0.5 + 0.3)))
+      const shuffled = [...allItems].sort(() => Math.random() - 0.5)
+      const checkedItems = shuffled.slice(0, checkedCount)
+
+      return {
+        stageId: stage.id,
+        stageTitle: stage.title,
+        checkedItems,
+        totalItems: allItems.length,
+      }
+    })
+}
+
 let reportCounter = 0
 
 export function generateSingleWorkslip(filename: string): Workslip {
@@ -108,28 +249,8 @@ export function generateSingleWorkslip(filename: string): Workslip {
   const customer = randomItem(customers)
   const installations = randomSubset(['gas', 'vand', 'aflob', 'varme'] as InstallationType[])
   const workKind = randomItem(['nyInstallation', 'aendring', 'reparation', 'serviceAndet'] as WorkKind[])
-  const status = 'pending'
   const submitted = new Date().toISOString()
   const technician = randomItem(technicians)
-
-  const activeColumns = [...new Set(installations.map(i => installationToControlColumn[i]))]
-
-  const controlStages: ControlStageEntry[] = controlStageDefs
-    .filter(stageDef =>
-      activeColumns.some(col => (stageDef.items as any)[col])
-    )
-    .map(stageDef => {
-      const totalItems = activeColumns.reduce((sum, col) => sum + ((stageDef.items as any)[col] || 0), 0)
-      const checkedItemIds: string[] = []
-      return {
-        stageId: stageDef.id,
-        stageTitle: stageDef.title,
-        checkedItemIds,
-        totalItems,
-      }
-    })
-
-  const closureFlags = ['faerdig'] as ClosureFlag[]
 
   return {
     id: `WSL-${String(reportCounter).padStart(4, '0')}`,
@@ -144,12 +265,12 @@ export function generateSingleWorkslip(filename: string): Workslip {
     installationTypes: installations,
     workKind,
     customWorkKind: workKind === 'serviceAndet' ? 'Serviceeftersyn og rengøring' : '',
-    controlStages,
+    controlStages: buildControlStages(installations),
     remarks: '',
-    closureFlags,
+    closureFlags: ['faerdig'] as ClosureFlag[],
     technicianName: technician,
     signatureDate: new Date().toISOString().split('T')[0],
-    status,
+    status: 'pending' as WorkslipStatus,
     submittedAt: submitted,
     processedAt: null,
     fileSize: Math.floor(Math.random() * 5000000) + 100000,
@@ -169,26 +290,6 @@ export function generateMockWorkslips(count: number): Workslip[] {
       : null
     const technician = randomItem(technicians)
 
-    const activeColumns = [...new Set(installations.map(i => installationToControlColumn[i]))]
-
-    const controlStages: ControlStageEntry[] = controlStageDefs
-      .filter(stageDef =>
-        activeColumns.some(col => (stageDef.items as any)[col])
-      )
-      .map(stageDef => {
-        const totalItems = activeColumns.reduce((sum, col) => sum + ((stageDef.items as any)[col] || 0), 0)
-        const checked = Math.random() > 0.2 ? totalItems : Math.floor(totalItems * (Math.random() * 0.6 + 0.3))
-        const checkedItemIds = Array.from({ length: checked }, (_, i) => `${stageDef.id}-${i}`)
-        return {
-          stageId: stageDef.id,
-          stageTitle: stageDef.title,
-          checkedItemIds,
-          totalItems,
-        }
-      })
-
-    const closureFlags = randomSubset(['faerdig', 'faerdigmelding', 'driftVedligehold', 'klarTilFaktura', 'tegninger'] as ClosureFlag[])
-
     return {
       id: `WSL-${String(reportCounter).padStart(4, '0')}`,
       reportNumber: `4V05-${String(reportCounter).padStart(3, '0')}`,
@@ -202,9 +303,9 @@ export function generateMockWorkslips(count: number): Workslip[] {
       installationTypes: installations,
       workKind,
       customWorkKind: workKind === 'serviceAndet' ? 'Serviceeftersyn og rengøring' : '',
-      controlStages,
+      controlStages: buildControlStages(installations),
       remarks: randomItem(remarksList),
-      closureFlags,
+      closureFlags: randomSubset(['faerdig', 'faerdigmelding', 'driftVedligehold', 'klarTilFaktura', 'tegninger'] as ClosureFlag[]),
       technicianName: technician,
       signatureDate: new Date(submitted).toISOString().split('T')[0],
       status,
@@ -214,5 +315,3 @@ export function generateMockWorkslips(count: number): Workslip[] {
     }
   })
 }
-
-export { installationTypeLabels, workKindLabels, closureFlagLabels }

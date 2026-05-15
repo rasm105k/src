@@ -64,13 +64,13 @@ if (Test-Path $PARAMETERS) {
     az deployment group create `
         --resource-group $RESOURCE_GROUP `
         --name $DEPLOY_NAME `
-        --mode Incremental
+        --mode Incremental `
         --template-file $TEMPLATE `
         --parameters $PARAMETERS `
         --parameters companyName=$COMPANY_NAME
 } else {
     az deployment group create `
-        --mode Incremental
+        --mode Incremental `
         --resource-group $RESOURCE_GROUP `
         --name $DEPLOY_NAME `
         --template-file $TEMPLATE

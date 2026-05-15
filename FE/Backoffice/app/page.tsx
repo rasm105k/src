@@ -35,6 +35,8 @@ import {
   installationTypeLabels,
   workKindLabels,
   closureFlagLabels,
+  controlStageDefs,
+  installationToControlColumns,
 } from '@/lib/mock-data'
 import type { Workslip, WorkslipStatus, InstallationType, ClosureFlag, WorkKind } from '@/lib/types'
 
@@ -179,6 +181,25 @@ export default function BackofficePage() {
       return {
         ...prev,
         closureFlags: without.includes(flag) ? without.filter(f => f !== flag) : [...without, flag],
+      }
+    })
+  }
+
+  function toggleDraftControlItem(stageId: string, item: { id: string; label: string }) {
+    setEditDraft(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        controlStages: prev.controlStages.map(stage =>
+          stage.stageId === stageId
+            ? {
+                ...stage,
+                checkedItems: stage.checkedItems.some(c => c.id === item.id)
+                  ? stage.checkedItems.filter(c => c.id !== item.id)
+                  : [...stage.checkedItems, item],
+              }
+            : stage
+        ),
       }
     })
   }
@@ -409,6 +430,7 @@ export default function BackofficePage() {
                   onChange={updateDraft}
                   onToggleInstallation={toggleDraftInstallation}
                   onToggleClosure={toggleDraftClosure}
+                  onToggleControlItem={toggleDraftControlItem}
                 />
               ) : (
                 <ViewContent selected={selected} />
@@ -545,25 +567,31 @@ function ViewContent({ selected }: { selected: Workslip }) {
         {selected.controlStages.length === 0 ? (
           <p className="text-sm text-gray-400">Ingen kontrolpunkter</p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {selected.controlStages.map(stage => (
               <div key={stage.stageId}>
-                <div className="flex items-center justify-between text-sm">
+                <div className="mb-1.5 flex items-center justify-between text-sm">
                   <span className="font-medium text-gray-700">{stage.stageTitle}</span>
-                  <span className="text-xs text-gray-400">{stage.checkedItemIds.length}/{stage.totalItems}</span>
+                  <span className="text-xs text-gray-400">{stage.checkedItems.length}/{stage.totalItems}</span>
                 </div>
-                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                  <div
-                    className="h-full rounded-full bg-gray-900 transition-all"
-                    style={{ width: `${(stage.checkedItemIds.length / Math.max(stage.totalItems, 1)) * 100}%` }}
-                  />
-                </div>
+                {stage.checkedItems.length > 0 ? (
+                  <div className="space-y-0.5">
+                    {stage.checkedItems.map(item => (
+                      <div key={item.id} className="flex items-start gap-2 rounded-md bg-gray-50 px-3 py-1.5 text-xs text-gray-600">
+                        <Check size={12} className="mt-0.5 shrink-0 text-green-600" />
+                        <span>{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">Ingen markeret</p>
+                )}
               </div>
             ))}
           </div>
         )}
         {selected.remarks && (
-          <div className="mt-3">
+          <div className="mt-4">
             <span className="text-xs font-medium text-gray-400">Bemærkninger</span>
             <p className="mt-0.5 text-sm text-gray-700">{selected.remarks}</p>
           </div>
@@ -625,11 +653,13 @@ function EditContent({
   onChange,
   onToggleInstallation,
   onToggleClosure,
+  onToggleControlItem,
 }: {
   draft: Workslip
   onChange: (field: keyof Workslip, value: any) => void
   onToggleInstallation: (type: InstallationType) => void
   onToggleClosure: (flag: ClosureFlag) => void
+  onToggleControlItem: (stageId: string, item: { id: string; label: string }) => void
 }) {
   return (
     <div className="divide-y divide-gray-50">
@@ -692,20 +722,52 @@ function EditContent({
       </Section>
 
       <Section icon={ClipboardCheck} title="Kontrolpunkter">
-        {draft.controlStages.map(stage => (
-          <div key={stage.stageId} className="mb-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-medium text-gray-700">{stage.stageTitle}</span>
-              <span className="text-xs text-gray-400">{stage.checkedItemIds.length}/{stage.totalItems}</span>
+        {draft.controlStages.map(stage => {
+          const stageDef = controlStageDefs.find(s => s.id === stage.stageId)
+          const activeColumns = [...new Set(draft.installationTypes.map(i => installationToControlColumns[i]))]
+          const stageItems: Array<{ id: string; label: string }> = []
+          for (const col of activeColumns) {
+            const colItems = stageDef?.items[col] ?? []
+            for (const item of colItems) {
+              stageItems.push(item)
+            }
+          }
+
+          return (
+            <div key={stage.stageId} className="mb-3">
+              <div className="mb-1.5 flex items-center justify-between text-sm">
+                <span className="font-medium text-gray-700">{stage.stageTitle}</span>
+                <span className="text-xs text-gray-400">{stage.checkedItems.length}/{stage.totalItems}</span>
+              </div>
+              <div className="space-y-0.5">
+                {stageItems.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">Ingen kontrolpunkter for valgte anlægstyper</p>
+                ) : stageItems.map(item => {
+                  const checked = stage.checkedItems.some(c => c.id === item.id)
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => onToggleControlItem(stage.stageId, item)}
+                      className={`flex w-full items-start gap-2 rounded-md px-3 py-1.5 text-xs transition-colors ${
+                        checked
+                          ? 'bg-gray-900 text-white hover:bg-gray-800'
+                          : 'bg-white text-gray-500 ring-1 ring-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded ${
+                        checked ? 'bg-white/20' : 'bg-gray-100'
+                      }`}>
+                        {checked && <Check size={11} className="text-white" />}
+                      </div>
+                      <span className="text-left">{item.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-              <div
-                className="h-full rounded-full bg-gray-900 transition-all"
-                style={{ width: `${(stage.checkedItemIds.length / Math.max(stage.totalItems, 1)) * 100}%` }}
-              />
-            </div>
-          </div>
-        ))}
+          )
+        })}
         <EditField label="Bemærkninger">
           <textarea value={draft.remarks} onChange={e => onChange('remarks', e.target.value)} className="input min-h-[60px]" rows={2} />
         </EditField>

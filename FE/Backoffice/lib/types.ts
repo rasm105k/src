@@ -12,10 +12,15 @@ export type ClosureFlag =
   | 'driftVedligehold'
   | 'klarTilFaktura'
 
+export interface CheckedItem {
+  id: string
+  label: string
+}
+
 export interface ControlStageEntry {
   stageId: string
   stageTitle: string
-  checkedItemIds: string[]
+  checkedItems: CheckedItem[]
   totalItems: number
 }
 

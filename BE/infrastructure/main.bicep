@@ -2,25 +2,36 @@ param companyName string = ''
 param location string = resourceGroup().location
 param environment string = 'dev'
 param notificationEmail string = ''
-param functionAppName string = 'func-${companyName}-${toLower(environment)}'
-param storageAccountName string = take('st${companyName}${toLower(environment)}', 24)
-param logicAppName string = 'la-docprocessor-${toLower(environment)}'
-param appInsightsName string = 'ai-${companyName}-${toLower(environment)}'
-param logAnalyticsName string = 'la-${companyName}-${toLower(environment)}'
-param identityName string = 'id-${companyName}-${toLower(environment)}'
-param keyVaultName string = take('kv-${companyName}-${toLower(environment)}', 24)
+
+param functionAppName string          = 'func-${companyName}-${toLower(environment)}'
+param storageAccountName string       = take('st${companyName}${toLower(environment)}', 24)
+param logicAppName string             = 'la-docprocessor-${toLower(environment)}'
+param appInsightsName string          = 'ai-${companyName}-${toLower(environment)}'
+param logAnalyticsName string         = 'law-${companyName}-${toLower(environment)}'
+param identityName string             = 'id-${companyName}-${toLower(environment)}'
+param keyVaultName string             = take('kv-${companyName}-${toLower(environment)}', 24)
 param documentIntelligenceName string = 'di-${companyName}-${toLower(environment)}'
+
+// ── Role definition IDs ───────────────────────────────────────────────────────
+// Centralised here so they're easy to audit and update.
+var roles = {
+  keyVaultSecretsUser:     '4633458b-436e-492d-b285-4f6b7b5e48d1'
+  cognitiveServicesUser:   'a97b65f3-24c7-4dac-a4ac-c5b2943a82d4'
+  storageBlobContributor:  'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+  storageQueueContributor: '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
+  storageTableContributor: '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
+}
 
 var tags = {
   environment: environment
   project: companyName
 }
 
-// ──────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
 // Monitoring
-// ──────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
 
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' = {
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: logAnalyticsName
   location: location
   tags: tags
@@ -41,75 +52,53 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
-// ──────────────────────────────────────────────
-// Identity
-// ──────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
+// User-Assigned Managed Identity
+// One identity, shared by all resources. All RBAC is granted to this identity.
+// ──────────────────────────────────────────────────────────────────────────────
 
-resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
+resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: identityName
   location: location
   tags: tags
 }
 
-// ──────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
 // Key Vault
-// ──────────────────────────────────────────────
+// RBAC-mode only (no access policies). Identity gets Secrets User.
+// ──────────────────────────────────────────────────────────────────────────────
 
-resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' = {
+resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
   name: keyVaultName
   location: location
   tags: tags
   properties: {
     sku: { name: 'standard', family: 'A' }
-    enableSoftDelete: true
-    enablePurgeProtection: true
-    softDeleteRetentionInDays: 7
-    enableRbacAuthorization: true
     tenantId: subscription().tenantId
+    enableRbacAuthorization: true
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 7
+    enablePurgeProtection: true
   }
 }
 
-resource keyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, identity.id, '4633458b-436e-492d-b285-4f6b7b5e48d1')
+resource kvRoleIdentity 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: 'kev-guid(keyVault.id, identity.id, roles.keyVaultSecretsUser)'
   scope: keyVault
   properties: {
     principalId: identity.properties.principalId
     principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-436e-492d-b285-4f6b7b5e48d1')
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.keyVaultSecretsUser)
   }
 }
 
-// ──────────────────────────────────────────────
-// Document Intelligence
-// ──────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────
+// Storage Account
+// Used by both the Function App runtime and as document storage.
+// Identity needs Blob + Queue + Table contributor for the Functions runtime.
+// ──────────────────────────────────────────────────────────────────────────────
 
-resource documentIntelligence 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
-  name: documentIntelligenceName
-  location: location
-  kind: 'FormRecognizer'
-  sku: { name: 'S0' }
-  tags: tags
-  properties: {
-    customSubDomainName: documentIntelligenceName
-    publicNetworkAccess: 'Enabled'
-  }
-}
-
-resource diCognitiveServicesUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(documentIntelligence.id, identity.id, '97f73555-30d5-4b2b-93e6-34f8b6e6f1c2')
-  scope: documentIntelligence
-  properties: {
-    principalId: identity.properties.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '97f73555-30d5-4b2b-93e6-34f8b6e6f1c2')
-  }
-}
-
-// ──────────────────────────────────────────────
-// Storage
-// ──────────────────────────────────────────────
-
-resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
   location: location
   kind: 'StorageV2'
@@ -122,7 +111,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
   }
 }
 
-resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2022-09-01' = {
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-01-01' = {
   parent: storageAccount
   name: 'default'
   properties: {
@@ -130,21 +119,78 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2022-09-01'
   }
 }
 
-resource uploadsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01' = {
+resource uploadsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
   parent: blobService
   name: 'uploads'
 }
 
-resource documentsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01' = {
+resource documentsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
   parent: blobService
   name: 'documents'
 }
 
-// ──────────────────────────────────────────────
-// Function App (Consumption Plan, Linux, .NET)
-// ──────────────────────────────────────────────
+resource storageRoleBlob 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: 'hej-guid(storageAccount.id, identity.id, roles.storageBlobContributor)'
+  scope: storageAccount
+  properties: {
+    principalId: identity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.storageBlobContributor)
+  }
+}
 
-resource hostingPlan 'Microsoft.Web/serverfarms@2022-09-01' = {
+// Required by the Functions runtime when using managed identity for AzureWebJobsStorage
+resource storageRoleQueue 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: 'med-guid(storageAccount.id, identity.id, roles.storageQueueContributor)'
+  scope: storageAccount
+  properties: {
+    principalId: identity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.storageQueueContributor)
+  }
+}
+
+resource storageRoleTable 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: 'dig-guid(storageAccount.id, identity.id, roles.storageTableContributor)'
+  scope: storageAccount
+  properties: {
+    principalId: identity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.storageTableContributor)
+  }
+}
+// ──────────────────────────────────────────────────────────────────────────────
+// Document Intelligence
+// ──────────────────────────────────────────────────────────────────────────────
+
+resource documentIntelligence 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
+  name: documentIntelligenceName
+  location: location
+  kind: 'FormRecognizer'
+  sku: { name: 'S0' }
+  tags: tags
+  properties: {
+    restore: true
+    customSubDomainName: documentIntelligenceName
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource diRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: 'fuck-guid(documentIntelligence.id, identity.id, roles.cognitiveServicesUser)'
+  scope: documentIntelligence
+  properties: {
+    principalId: identity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.cognitiveServicesUser)
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Function App
+// ──────────────────────────────────────────────────────────────────────────────
+
+resource hostingPlan 'Microsoft.Web/serverfarms@2023-01-01' = {
   name: 'asp-${companyName}-${toLower(environment)}'
   location: location
   kind: 'linux'
@@ -155,41 +201,43 @@ resource hostingPlan 'Microsoft.Web/serverfarms@2022-09-01' = {
   }
 }
 
-resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
+resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
   name: functionAppName
   location: location
   kind: 'functionapp,linux'
   tags: tags
   identity: {
-    type: 'SystemAssigned, UserAssigned'
+    type: 'UserAssigned'
     userAssignedIdentities: { '${identity.id}': {} }
   }
   properties: {
     serverFarmId: hostingPlan.id
     httpsOnly: true
     siteConfig: {
-      linuxFxVersion: 'DOTNET-ISOLATED|10.0'
+      linuxFxVersion: 'DOTNET-ISOLATED|8.0'
       alwaysOn: false
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
       appSettings: [
-        { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'dotnet-isolated' }
-        { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
-        { name: 'AzureWebJobsStorage__accountName', value: storageAccount.name }
+        { name: 'FUNCTIONS_WORKER_RUNTIME',              value: 'dotnet-isolated' }
+        { name: 'FUNCTIONS_EXTENSION_VERSION',           value: '~4' }
+        { name: 'AzureWebJobsStorage__accountName',      value: storageAccount.name }
+        { name: 'AzureWebJobsStorage__credential',       value: 'managedidentity' }
+        { name: 'AzureWebJobsStorage__clientId',         value: identity.properties.clientId }
         { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
-        { name: 'UPLOAD_CONTAINER', value: 'uploads' }
-        { name: 'STORAGE_ACCOUNT_NAME', value: storageAccount.name }
-        { name: 'AZURE_CLIENT_ID', value: identity.properties.clientId }
-        { name: 'KEY_VAULT_URL', value: keyVault.properties.vaultUri }
-        { name: 'DOCUMENT_INTELLIGENCE_ENDPOINT', value: documentIntelligence.properties.endpoint }
+        { name: 'AZURE_CLIENT_ID',                       value: identity.properties.clientId }
+        { name: 'UPLOAD_CONTAINER',                      value: 'uploads' }
+        { name: 'STORAGE_ACCOUNT_NAME',                  value: storageAccount.name }
+        { name: 'KEY_VAULT_URL',                         value: keyVault.properties.vaultUri }
+        { name: 'DOCUMENT_INTELLIGENCE_ENDPOINT',        value: documentIntelligence.properties.endpoint }
       ]
     }
   }
 }
 
-// ──────────────────────────────────────────────
-// API Connections (used by Logic App)
-// ──────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
+// Service Connections
+// ──────────────────────────────────────────────────────────────────────────────
 
 resource blobConnection 'Microsoft.Web/connections@2016-06-01' = {
   name: 'as-${companyName}-blob-${toLower(environment)}'
@@ -219,38 +267,23 @@ resource documentIntelligenceConnection 'Microsoft.Web/connections@2016-06-01' =
   }
 }
 
-resource outlookConnection 'Microsoft.Web/connections@2016-06-01' = {
-  name: 'as-${companyName}-outlook-${toLower(environment)}'
-  location: location
-  tags: tags
-  properties: {
-    displayName: 'Outlook Connection'
-    api: { id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'outlook') }
-    parameterValues: {
-      authType: 'ManagedServiceIdentity'
-      identityId: identity.id
-    }
-  }
-}
 
-// ──────────────────────────────────────────────
-// Logic App
-//
-// The workflow definition is loaded from the
-// workflow.json file at compile time.
-// Placeholders are substituted at deploy time.
-// ──────────────────────────────────────────────
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Logic App Workflow
+// ──────────────────────────────────────────────────────────────────────────────
 
 var workflowTemplate = loadTextContent('./logic-app/workflow.json')
 
 var workflowDefinition = json(
   replace(
     replace(
-      replace(workflowTemplate, '__SUB_ID__', subscription().subscriptionId),
-      '__STORAGE_NAME__', storageAccountName
-    ),
-    '__NOTIFICATION_EMAIL__',
-    notificationEmail
+      replace(
+        replace(workflowTemplate,
+          '__SUB_ID__',        subscription().subscriptionId),
+          '__STORAGE_NAME__',  storageAccountName),
+          '__NOTIFICATION_EMAIL__', notificationEmail),
+          '__ACS_SENDER__',    ''
   )
 )
 
@@ -259,7 +292,7 @@ resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
   location: location
   tags: tags
   identity: {
-    type: 'SystemAssigned, UserAssigned'
+    type: 'UserAssigned'
     userAssignedIdentities: { '${identity.id}': {} }
   }
   properties: {
@@ -278,51 +311,22 @@ resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
             connectionName: 'formrecognizer'
             id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'formrecognizer')
           }
-          outlook: {
-            connectionId: outlookConnection.id
-            connectionName: 'outlook'
-            id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'outlook')
-          }
         }
       }
     }
   }
 }
 
-// ──────────────────────────────────────────────
-// RBAC — all via User-Assigned Managed Identity
-// ──────────────────────────────────────────────
-
-resource rbacStorageBlobContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storageAccount.id, identity.id, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
-  scope: storageAccount
-  properties: {
-    principalId: identity.properties.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
-  }
-}
-
-resource rbacStorageBlobReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storageAccount.id, identity.id, '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')
-  scope: storageAccount
-  properties: {
-    principalId: identity.properties.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')
-  }
-}
-
-// ──────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
 // Outputs
-// ──────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
 
-output STORAGE_ACCOUNT_NAME string = storageAccount.name
-output FUNCTION_APP_NAME string = functionAppName
-output LOGIC_APP_NAME string = logicAppName
-output MANAGED_IDENTITY_CLIENT_ID string = identity.properties.clientId
-output MANAGED_IDENTITY_PRINCIPAL_ID string = identity.properties.principalId
-output APP_INSIGHTS_CONNECTION_STRING string = appInsights.properties.ConnectionString
-output KEY_VAULT_URI string = keyVault.properties.vaultUri
-output DOCUMENT_INTELLIGENCE_ENDPOINT string = documentIntelligence.properties.endpoint
-output DOCUMENT_INTELLIGENCE_NAME string = documentIntelligenceName
+output STORAGE_ACCOUNT_NAME string             = storageAccount.name
+output FUNCTION_APP_NAME string                = functionAppName
+output LOGIC_APP_NAME string                   = logicAppName
+output MANAGED_IDENTITY_CLIENT_ID string       = identity.properties.clientId
+output MANAGED_IDENTITY_PRINCIPAL_ID string    = identity.properties.principalId
+output APP_INSIGHTS_CONNECTION_STRING string   = appInsights.properties.ConnectionString
+output KEY_VAULT_URI string                    = keyVault.properties.vaultUri
+output DOCUMENT_INTELLIGENCE_ENDPOINT string   = documentIntelligence.properties.endpoint
+output DOCUMENT_INTELLIGENCE_NAME string       = documentIntelligenceName
