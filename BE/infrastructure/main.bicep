@@ -1,4 +1,4 @@
-param companyName string = 'TEMPLATE'
+param companyName string = ''
 param location string = resourceGroup().location
 param environment string = 'dev'
 param notificationEmail string = ''
@@ -323,7 +323,6 @@ output LOGIC_APP_NAME string = logicAppName
 output MANAGED_IDENTITY_CLIENT_ID string = identity.properties.clientId
 output MANAGED_IDENTITY_PRINCIPAL_ID string = identity.properties.principalId
 output APP_INSIGHTS_CONNECTION_STRING string = appInsights.properties.ConnectionString
-output EVENT_GRID_SYSTEM_TOPIC_ID string = systemTopic.id
 output KEY_VAULT_URI string = keyVault.properties.vaultUri
 output DOCUMENT_INTELLIGENCE_ENDPOINT string = documentIntelligence.properties.endpoint
 output DOCUMENT_INTELLIGENCE_NAME string = documentIntelligenceName
