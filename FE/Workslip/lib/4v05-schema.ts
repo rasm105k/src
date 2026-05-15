@@ -98,22 +98,49 @@ export function getControlStageValidationErrors({
   activeColumns: ActiveControlColumn[];
 }): Record<string, string> {
   const checkedItems = new Set(checkedItemIds);
-
-  return Object.fromEntries(
-    selectedStageIds
-      .map((stageId) => {
-        const stage = controlStages.find((item) => item.id === stageId);
-        if (!stage) return null;
-
-        const relevantItemIds = activeColumns.flatMap((column) =>
-          (stage.items[column] ?? []).map((item) => item.id)
-        );
-        const hasCheckedSubcategory = relevantItemIds.some((itemId) => checkedItems.has(itemId));
-
-        return hasCheckedSubcategory ? null : [stage.id, `Vælg mindst én underkategori i ${stage.title}.`];
-      })
-      .filter((entry): entry is [string, string] => Boolean(entry))
+  const relevantCheckedItemIds = activeColumns.flatMap((column) =>
+    controlStages.flatMap((stage) => (stage.items[column] ?? []).map((item) => item.id))
   );
+  const hasAnyRelevantCheckedSubcategory = relevantCheckedItemIds.some((itemId) => checkedItems.has(itemId));
+
+  if (selectedStageIds.length === 0 && !hasAnyRelevantCheckedSubcategory) {
+    return {
+      _controls: "Du skal vælge mindst et kontrolpunkt for at gå videre"
+    };
+  }
+
+  return hasAnyRelevantCheckedSubcategory
+    ? {}
+    : {
+        _controls: "Du skal vælge mindst et kontrolpunkt for at gå videre"
+      };
+}
+
+export function getCategoryValidationErrors({
+  selectedInstallations,
+  workKind,
+  customWorkKind
+}: {
+  selectedInstallations: InstallationType[];
+  workKind: WorkKind | null;
+  customWorkKind: string;
+}): string[] {
+  const errors: string[] = [];
+
+  if (selectedInstallations.length === 0) {
+    errors.push("Vælg mindst én anlægstype.");
+  }
+
+  if (!workKind) {
+    errors.push("Vælg en arbejdstype.");
+  }
+
+  const selectedWorkKind = workKinds.find((kind) => kind.id === workKind);
+  if (selectedWorkKind?.requiresCustomText && customWorkKind.trim().length === 0) {
+    errors.push("Skriv opgavetype i feltet.");
+  }
+
+  return errors;
 }
 
 export const workKinds: Array<{

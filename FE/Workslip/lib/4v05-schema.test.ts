@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   controlStages,
   controlStates,
+  getCategoryValidationErrors,
   getControlColumnsForInstallations,
   getControlStageValidationErrors,
   installationTypes,
@@ -103,7 +104,7 @@ describe("4V05 installation categories", () => {
     });
   });
 
-  it("requires a selected control category to have at least one checked subcategory", () => {
+  it("shows one control-step error when no control point is checked", () => {
     const errors = getControlStageValidationErrors({
       selectedStageIds: ["slutkontrol"],
       checkedItemIds: [],
@@ -111,7 +112,19 @@ describe("4V05 installation categories", () => {
     });
 
     assert.deepEqual(errors, {
-      slutkontrol: "Vælg mindst én underkategori i Slutkontrol."
+      _controls: "Du skal vælge mindst et kontrolpunkt for at gå videre"
+    });
+  });
+
+  it("requires at least one checked subcategory before leaving the control step", () => {
+    const errors = getControlStageValidationErrors({
+      selectedStageIds: [],
+      checkedItemIds: [],
+      activeColumns: ["vand"]
+    });
+
+    assert.deepEqual(errors, {
+      _controls: "Du skal vælge mindst et kontrolpunkt for at gå videre"
     });
   });
 
@@ -123,5 +136,38 @@ describe("4V05 installation categories", () => {
     });
 
     assert.deepEqual(errors, {});
+  });
+
+  it("requires at least one installation type and one work kind on the category step", () => {
+    const errors = getCategoryValidationErrors({
+      selectedInstallations: [],
+      workKind: null,
+      customWorkKind: ""
+    });
+
+    assert.deepEqual(errors, [
+      "Vælg mindst én anlægstype.",
+      "Vælg en arbejdstype."
+    ]);
+  });
+
+  it("requires custom work text when Andet is selected", () => {
+    const errors = getCategoryValidationErrors({
+      selectedInstallations: ["vand"],
+      workKind: "serviceAndet",
+      customWorkKind: "   "
+    });
+
+    assert.deepEqual(errors, ["Skriv opgavetype i feltet."]);
+  });
+
+  it("accepts valid category selections", () => {
+    const errors = getCategoryValidationErrors({
+      selectedInstallations: ["vand"],
+      workKind: "serviceAndet",
+      customWorkKind: "Fejlsøgning"
+    });
+
+    assert.deepEqual(errors, []);
   });
 });

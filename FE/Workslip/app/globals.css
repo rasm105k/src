@@ -635,6 +635,17 @@ select:focus {
   font-weight: 850;
 }
 
+.control-step-error {
+  border: 1px solid rgba(180, 35, 24, 0.24);
+  border-radius: 16px;
+  background: #fff8f7;
+  color: var(--red);
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 850;
+  padding: 12px 13px;
+}
+
 .control-stages {
   display: grid;
   gap: 14px;
@@ -688,24 +699,6 @@ select:focus {
 
 .control-stage.expanded .control-stage-header svg {
   transform: rotate(180deg);
-}
-
-.control-stage.error {
-  border-color: var(--red);
-}
-
-.control-stage.error .control-stage-header {
-  background: #fff8f7;
-}
-
-.control-stage-error {
-  border-top: 1px solid rgba(180, 35, 24, 0.18);
-  background: #fff8f7;
-  color: var(--red);
-  font-size: 14px;
-  line-height: 1.3;
-  font-weight: 850;
-  padding: 10px 15px;
 }
 
 .control-columns {
@@ -893,24 +886,49 @@ select:focus {
   border-radius: 22px;
   padding: 11px;
   box-shadow: 0 14px 34px rgba(16, 24, 40, 0.18);
+  display: grid;
+  gap: 9px;
+}
+
+.bottom-error {
+  border: 1px solid rgba(180, 35, 24, 0.24);
+  border-radius: 14px;
+  background: #fff8f7;
+  color: var(--red);
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 850;
+  padding: 10px 11px;
+}
+
+.bottom-error p,
+p.bottom-error {
+  margin: 0;
+}
+
+.bottom-error p + p {
+  margin-top: 4px;
+}
+
+.bottom-actions {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.bottom-bar div {
+.bottom-actions div {
   flex: 1;
   min-width: 0;
 }
 
-.bottom-bar span {
+.bottom-actions span {
   display: block;
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
 }
 
-.bottom-bar strong {
+.bottom-actions strong {
   display: block;
   color: var(--text);
   font-size: 14px;
@@ -921,7 +939,7 @@ select:focus {
   margin-top: 2px;
 }
 
-.bottom-bar button {
+.bottom-actions button {
   min-height: 52px;
   border: 0;
   border-radius: 16px;

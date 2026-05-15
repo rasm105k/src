@@ -15,6 +15,7 @@ import {
   closureFlags,
   controlColumns,
   controlStages,
+  getCategoryValidationErrors,
   getControlColumnsForInstallations,
   getControlStageValidationErrors,
   installationTypes,
@@ -60,10 +61,11 @@ export default function Home() {
   const [selectedInstallations, setSelectedInstallations] = useState<InstallationType[]>([]);
   const [workKind, setWorkKind] = useState<WorkKind | null>(null);
   const [customWorkKind, setCustomWorkKind] = useState("");
+  const [categoryErrors, setCategoryErrors] = useState<string[]>([]);
   const [controlValues, setControlValues] = useState<Record<string, boolean>>(initialControlValues);
   const [expandedControlStages, setExpandedControlStages] = useState<string[]>([]);
   const [selectedControlStages, setSelectedControlStages] = useState<string[]>([]);
-  const [controlStageErrors, setControlStageErrors] = useState<Record<string, string>>({});
+  const [controlStepError, setControlStepError] = useState("");
   const [customerInfoExpanded, setCustomerInfoExpanded] = useState(false);
   const [closure, setClosure] = useState<ClosureFlag[]>(["faerdig", "driftVedligehold", "klarTilFaktura"]);
   const [showDescriptionError, setShowDescriptionError] = useState(false);
@@ -108,6 +110,19 @@ export default function Home() {
       return;
     }
 
+    if (currentStep === "categories") {
+      const errors = getCategoryValidationErrors({
+        selectedInstallations,
+        workKind,
+        customWorkKind
+      });
+
+      setCategoryErrors(errors);
+      if (errors.length > 0) {
+        return;
+      }
+    }
+
     if (currentStep === "controls") {
       const errors = getControlStageValidationErrors({
         selectedStageIds: selectedControlStages,
@@ -117,9 +132,8 @@ export default function Home() {
         activeColumns: activeControlColumnIds
       });
 
-      setControlStageErrors(errors);
+      setControlStepError(errors._controls ?? "");
       if (Object.keys(errors).length > 0) {
-        setExpandedControlStages((current) => Array.from(new Set([...current, ...Object.keys(errors)])));
         return;
       }
     }
@@ -139,26 +153,17 @@ export default function Home() {
   function toggleInstallation(id: InstallationType) {
     setSelectedInstallations((current) => {
       if (current.includes(id)) {
-        return current.length === 1 ? current : current.filter((item) => item !== id);
+        return current.filter((item) => item !== id);
       }
 
       return [...current, id];
     });
+    setCategoryErrors([]);
   }
 
   function toggleControlItem(itemId: string) {
     setControlValues((current) => ({ ...current, [itemId]: !current[itemId] }));
-    setControlStageErrors((current) => {
-      const stage = controlStages.find((candidate) =>
-        Object.values(candidate.items)
-          .flat()
-          .some((item) => item.id === itemId)
-      );
-      if (!stage || !current[stage.id]) return current;
-
-      const { [stage.id]: _removed, ...remaining } = current;
-      return remaining;
-    });
+    setControlStepError("");
   }
 
   function toggleControlStage(stageId: string) {
@@ -214,8 +219,6 @@ export default function Home() {
           {currentStep === "report" && (
             <StepFrame
               title="4V05 arbejdsrapport"
-              lead="Kundens faktiske skema starter med kunde, adresse, kontaktperson, dato, rapportnummer og opgavebeskrivelse."
-              callout="Gas-, vand- og sanitetsinstallationer samt servicearbejder på vand- og sanitetsinstallationer."
             >
               <Field label="Kunde">
                 <input defaultValue="Aarhus Ejendomme ApS" autoComplete="organization" />
@@ -241,7 +244,6 @@ export default function Home() {
               </div>
               <Field
                 label="Opgavebeskrivelse"
-                hint="Beskriv sagen kort, så kontrollen senere kan kobles til opgaven."
                 error={showDescriptionError ? "Skriv en opgavebeskrivelse før du går videre." : undefined}
               >
                 <textarea
@@ -318,7 +320,10 @@ export default function Home() {
                       type="button"
                       role="radio"
                       aria-checked={workKind === kind.id}
-                      onClick={() => setWorkKind(kind.id)}
+                      onClick={() => {
+                        setWorkKind((current) => (current === kind.id ? null : kind.id));
+                        setCategoryErrors([]);
+                      }}
                     >
                       <strong>{kind.shortLabel}</strong>
                     </button>
@@ -334,7 +339,10 @@ export default function Home() {
                   <Field label="Ret opgavetype" hint="Skriv den tekst der skal stå på arbejdssedlen.">
                     <input
                       value={customWorkKind}
-                      onChange={(event) => setCustomWorkKind(event.target.value)}
+                      onChange={(event) => {
+                        setCustomWorkKind(event.target.value);
+                        setCategoryErrors([]);
+                      }}
                       placeholder="Fx serviceeftersyn, fejlsøgning eller rådgivning"
                     />
                   </Field>
@@ -361,7 +369,6 @@ export default function Home() {
                     columns={activeControlColumnIds}
                     expanded={expandedControlStages.includes(stage.id)}
                     selected={selectedControlStages.includes(stage.id)}
-                    error={controlStageErrors[stage.id]}
                     values={controlValues}
                     onToggleStage={() => toggleControlStage(stage.id)}
                     onToggleItem={toggleControlItem}
@@ -445,14 +452,24 @@ export default function Home() {
         </div>
 
         <footer className="bottom-bar">
-          <div>
-            <span>{stepText}</span>
-            <strong>{currentStep === "done" ? "Færdig" : `Næste: ${nextLabels[currentStep]}`}</strong>
+          {currentStep === "categories" && categoryErrors.length > 0 && (
+            <div className="bottom-error">
+              {categoryErrors.map((error) => (
+                <p key={error}>{error}</p>
+              ))}
+            </div>
+          )}
+          {currentStep === "controls" && controlStepError && <p className="bottom-error">{controlStepError}</p>}
+          <div className="bottom-actions">
+            <div>
+              <span>{stepText}</span>
+              <strong>{currentStep === "done" ? "Færdig" : `Næste: ${nextLabels[currentStep]}`}</strong>
+            </div>
+            <button type="button" onClick={goNext}>
+              {primaryLabel}
+              {currentStep !== "done" && <ChevronRight size={18} />}
+            </button>
           </div>
-          <button type="button" onClick={goNext}>
-            {primaryLabel}
-            {currentStep !== "done" && <ChevronRight size={18} />}
-          </button>
         </footer>
       </section>
 
@@ -484,14 +501,14 @@ function StepFrame({
   children
 }: {
   title: string;
-  lead: string;
+  lead?: string;
   callout?: string;
   children: React.ReactNode;
 }) {
   return (
     <>
       <h1>{title}</h1>
-      <p className="lead">{lead}</p>
+      {lead && <p className="lead">{lead}</p>}
       {callout && (
         <div className="callout">
           <span>{callout}</span>
@@ -528,7 +545,6 @@ function ControlStageCard({
   columns,
   expanded,
   selected,
-  error,
   values,
   onToggleStage,
   onToggleItem
@@ -537,7 +553,6 @@ function ControlStageCard({
   columns: ActiveControlColumn[];
   expanded: boolean;
   selected: boolean;
-  error?: string;
   values: Record<string, boolean>;
   onToggleStage: () => void;
   onToggleItem: (itemId: string) => void;
@@ -549,7 +564,7 @@ function ControlStageCard({
   );
 
   return (
-    <article className={`control-stage ${expanded ? "expanded" : ""} ${error ? "error" : ""}`}>
+    <article className={`control-stage ${expanded ? "expanded" : ""}`}>
       <button className="control-stage-header" type="button" aria-expanded={expanded} onClick={onToggleStage}>
         <div>
           <h2>{stage.title}</h2>
@@ -559,7 +574,6 @@ function ControlStageCard({
         </div>
         <ChevronDown size={20} strokeWidth={2.5} />
       </button>
-      {error && <p className="control-stage-error">{error}</p>}
       {expanded && (
         <div className="control-columns">
           {columns.map((column) => {
