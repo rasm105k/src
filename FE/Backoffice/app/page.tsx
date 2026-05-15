@@ -38,6 +38,7 @@ import {
   controlStageDefs,
   installationToControlColumns,
 } from '@/lib/mock-data'
+import { openQControlReport } from '@/lib/q-control-report'
 import type { Workslip, WorkslipStatus, InstallationType, ClosureFlag, WorkKind } from '@/lib/types'
 
 const statusConfig: Record<WorkslipStatus, { label: string; color: string }> = {
@@ -438,7 +439,10 @@ export default function BackofficePage() {
             </div>
 
             <div className="border-t border-gray-100 px-6 py-4">
-              <button className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800">
+              <button
+                onClick={() => openQControlReport(selected)}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+              >
                 <FileText size={16} />
                 Åbn PDF-rapport
               </button>

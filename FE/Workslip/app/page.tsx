@@ -71,7 +71,7 @@ export default function Home() {
   const [closureError, setClosureError] = useState("");
   const [showDescriptionError, setShowDescriptionError] = useState(false);
   const [description, setDescription] = useState("");
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showInlineConfirm, setShowInlineConfirm] = useState(false);
   const [customerName, setCustomerName] = useState("Aarhus Ejendomme ApS");
   const [address, setAddress] = useState("Trøjborgvej 12, 8200 Aarhus N");
   const [contactPerson, setContactPerson] = useState("Mette Jensen");
@@ -155,7 +155,7 @@ export default function Home() {
     setClosureError("");
 
     if (currentStep === "signature") {
-      setShowConfirmDialog(true);
+      setShowInlineConfirm(true);
       return;
     }
 
@@ -533,28 +533,6 @@ export default function Home() {
                 </button>
               </div>
 
-              {showConfirmDialog && (
-                <div className="modal-overlay" onClick={() => setShowConfirmDialog(false)}>
-                  <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
-                    <h2>Send rapport til kontoret?</h2>
-                    <p>Er du sikker på at rapporten er korrekt udfyldt og klar til gennemgang?</p>
-                    <div className="modal-actions">
-                      <button className="modal-btn secondary" onClick={() => setShowConfirmDialog(false)}>
-                        Annuller
-                      </button>
-                      <button
-                        className="modal-btn primary"
-                        onClick={() => {
-                          setShowConfirmDialog(false);
-                          setCurrentStep("done");
-                        }}
-                      >
-                        Ja, send
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </StepFrame>
           )}
 
@@ -663,16 +641,36 @@ export default function Home() {
           )}
           {currentStep === "controls" && controlStepError && <p className="bottom-error">{controlStepError}</p>}
           {currentStep === "closure" && closureError && <p className="bottom-error">{closureError}</p>}
-          <div className="bottom-actions">
-            <div>
-              <span>{stepText}</span>
-              <strong>{currentStep === "done" ? "Færdig" : `Næste: ${nextLabels[currentStep]}`}</strong>
+          {currentStep === "signature" && showInlineConfirm ? (
+            <div className="inline-confirm">
+              <span>Er du færdig?</span>
+              <div className="inline-confirm-actions">
+                <button className="inline-confirm-btn secondary" onClick={() => setShowInlineConfirm(false)}>
+                  Annuller
+                </button>
+                <button
+                  className="inline-confirm-btn primary"
+                  onClick={() => {
+                    setShowInlineConfirm(false);
+                    setCurrentStep("done");
+                  }}
+                >
+                  Ja, send
+                </button>
+              </div>
             </div>
-            <button type="button" onClick={goNext}>
-              {primaryLabel}
-              {currentStep !== "done" && <ChevronRight size={18} />}
-            </button>
-          </div>
+          ) : (
+            <div className="bottom-actions">
+              <div>
+                <span>{stepText}</span>
+                <strong>{currentStep === "done" ? "Færdig" : `Næste: ${nextLabels[currentStep]}`}</strong>
+              </div>
+              <button type="button" onClick={goNext}>
+                {primaryLabel}
+                {currentStep !== "done" && <ChevronRight size={18} />}
+              </button>
+            </div>
+          )}
         </footer>
       </section>
 

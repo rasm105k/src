@@ -77,7 +77,7 @@
         }
       },
       "runAfter": {
-        "Extract_file_name": ["Succeeded"],
+        "Extract_file_name": ["Succeded"],
         "Analyze_with_Document_Intelligence": ["Succeeded"]
       }
     },
