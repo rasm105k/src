@@ -2,14 +2,14 @@ param companyName string = 'TEMPLATE'
 param location string = resourceGroup().location
 param environment string = 'dev'
 param notificationEmail string = ''
-param functionAppName string = 'func-docfeeder-${toLower(environment)}'
-param storageAccountName string = take('stdocfeeder${toLower(environment)}', 24)
+param functionAppName string = 'func-${companyName}-${toLower(environment)}'
+param storageAccountName string = take('st${companyName}${toLower(environment)}', 24)
 param logicAppName string = 'la-docprocessor-${toLower(environment)}'
-param appInsightsName string = 'ai-docfeeder-${toLower(environment)}'
-param logAnalyticsName string = 'la-docfeeder-${toLower(environment)}'
-param identityName string = 'id-docfeeder-${toLower(environment)}'
-param keyVaultName string = take('kv-docfeeder-${toLower(environment)}', 24)
-param documentIntelligenceName string = 'di-docfeeder-${toLower(environment)}'
+param appInsightsName string = 'ai-${companyName}-${toLower(environment)}'
+param logAnalyticsName string = 'la-${companyName}-${toLower(environment)}'
+param identityName string = 'id-${companyName}-${toLower(environment)}'
+param keyVaultName string = take('kv-${companyName}-${toLower(environment)}', 24)
+param documentIntelligenceName string = 'di-${companyName}-${toLower(environment)}'
 
 var tags = {
   environment: environment
@@ -123,18 +123,21 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
 }
 
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2022-09-01' = {
-  name: '${storageAccount.name}/default'
+  parent: storageAccount
+  name: 'default'
   properties: {
     deleteRetentionPolicy: { enabled: true, days: 7 }
   }
 }
 
 resource uploadsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01' = {
-  name: '${blobService.name}/uploads'
+  parent: blobService
+  name: 'uploads'
 }
 
 resource documentsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01' = {
-  name: '${blobService.name}/documents'
+  parent: blobService
+  name: 'documents'
 }
 
 // ──────────────────────────────────────────────
@@ -142,7 +145,7 @@ resource documentsContainer 'Microsoft.Storage/storageAccounts/blobServices/cont
 // ──────────────────────────────────────────────
 
 resource hostingPlan 'Microsoft.Web/serverfarms@2022-09-01' = {
-  name: 'asp-docfeeder-${toLower(environment)}'
+  name: 'asp-${companyName}-${toLower(environment)}'
   location: location
   kind: 'linux'
   sku: { name: 'Y1', tier: 'Dynamic' }
@@ -165,8 +168,8 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
     serverFarmId: hostingPlan.id
     httpsOnly: true
     siteConfig: {
-      linuxFxVersion: 'DOTNET-ISOLATED|8.0'
-      alwaysOn: false
+      linuxFxVersion: 'DOTNET-ISOLATED|10.0'
+      alwaysOn: true
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
       appSettings: [
@@ -185,25 +188,11 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
 }
 
 // ──────────────────────────────────────────────
-// Event Grid System Topic (for Storage events)
-// ──────────────────────────────────────────────
-
-resource systemTopic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
-  name: 'eg-docfeeder-${toLower(environment)}'
-  location: location
-  tags: tags
-  properties: {
-    source: storageAccount.id
-    topicType: 'Microsoft.Storage.StorageAccounts'
-  }
-}
-
-// ──────────────────────────────────────────────
 // API Connections (used by Logic App)
 // ──────────────────────────────────────────────
 
 resource blobConnection 'Microsoft.Web/connections@2016-06-01' = {
-  name: 'as-docfeeder-blob-${toLower(environment)}'
+  name: 'as-${companyName}-blob-${toLower(environment)}'
   location: location
   tags: tags
   properties: {
@@ -216,22 +205,8 @@ resource blobConnection 'Microsoft.Web/connections@2016-06-01' = {
   }
 }
 
-resource eventGridConnection 'Microsoft.Web/connections@2016-06-01' = {
-  name: 'as-docfeeder-eg-${toLower(environment)}'
-  location: location
-  tags: tags
-  properties: {
-    displayName: 'Event Grid Connection'
-    api: { id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureeventgrid') }
-    parameterValues: {
-      authType: 'ManagedServiceIdentity'
-      identityId: identity.id
-    }
-  }
-}
-
 resource documentIntelligenceConnection 'Microsoft.Web/connections@2016-06-01' = {
-  name: 'as-docfeeder-di-${toLower(environment)}'
+  name: 'as-${companyName}-di-${toLower(environment)}'
   location: location
   tags: tags
   properties: {
@@ -245,7 +220,7 @@ resource documentIntelligenceConnection 'Microsoft.Web/connections@2016-06-01' =
 }
 
 resource outlookConnection 'Microsoft.Web/connections@2016-06-01' = {
-  name: 'as-docfeeder-outlook-${toLower(environment)}'
+  name: 'as-${companyName}-outlook-${toLower(environment)}'
   location: location
   tags: tags
   properties: {
@@ -259,7 +234,7 @@ resource outlookConnection 'Microsoft.Web/connections@2016-06-01' = {
 }
 
 // ──────────────────────────────────────────────
-// Logic App (Consumption, Event Grid trigger)
+// Logic App
 //
 // The workflow definition is loaded from the
 // workflow.json file at compile time.
@@ -297,11 +272,6 @@ resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
             connectionId: blobConnection.id
             connectionName: 'azureblob'
             id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureblob')
-          }
-          azureeventgrid: {
-            connectionId: eventGridConnection.id
-            connectionName: 'azureeventgrid'
-            id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureeventgrid')
           }
           formrecognizer: {
             connectionId: documentIntelligenceConnection.id
