@@ -2,128 +2,162 @@
 
 import {
   ArrowLeft,
-  Camera,
   Check,
+  ChevronDown,
   ChevronRight,
+  ClipboardCheck,
   FileSignature,
-  ListPlus,
-  Mic,
-  Plus,
+  PenLine,
   Wrench
 } from "lucide-react";
 import { useMemo, useState } from "react";
-
-type WorkType = "Service" | "Reparation" | "Installation";
-type MaterialMode = "used" | "none";
-type ControlResult = "ok" | "deviation";
+import {
+  closureFlags,
+  controlColumns,
+  controlStages,
+  getControlColumnsForInstallations,
+  installationTypes,
+  workKinds,
+  type ActiveControlColumn,
+  type ClosureFlag,
+  type ControlItem,
+  type ControlStage,
+  type InstallationType,
+  type WorkKind
+} from "../lib/4v05-schema";
 
 type StepId =
-  | "type"
-  | "case"
-  | "time"
-  | "work"
-  | "materials"
-  | "control"
+  | "report"
+  | "categories"
+  | "controls"
+  | "closure"
   | "signature"
   | "done";
 
-type MaterialLine = {
-  name: string;
-  quantity: string;
-  unit: string;
-  itemNo: string;
-};
+const stepOrder: StepId[] = ["report", "categories", "controls", "closure", "signature", "done"];
 
-const FLOW_BY_TYPE: Record<WorkType, StepId[]> = {
-  Service: ["type", "case", "time", "work", "signature", "done"],
-  Reparation: ["type", "case", "time", "work", "materials", "control", "signature", "done"],
-  Installation: ["type", "case", "time", "work", "materials", "control", "signature", "done"]
-};
-
-const STEP_TITLES: Record<StepId, string> = {
-  type: "Ny arbejdsseddel",
-  case: "Sag",
-  time: "Tid",
-  work: "Arbejde",
-  materials: "Materialer og foto",
-  control: "Slutkontrol",
-  signature: "Sikker signering",
-  done: "Sendt til kontoret"
-};
-
-const NEXT_LABELS: Record<StepId, string> = {
-  type: "Sag",
-  case: "Tid",
-  time: "Arbejde",
-  work: "Materialer",
-  materials: "Slutkontrol",
-  control: "Signering",
+const nextLabels: Record<StepId, string> = {
+  report: "Kategorier",
+  categories: "Kontrol",
+  controls: "Afslutning",
+  closure: "Underskrift",
   signature: "Send",
   done: "Færdig"
 };
 
-const defaultMaterials: MaterialLine[] = [
-  { name: 'Bundventil 1 1/4"', quantity: "1", unit: "stk.", itemNo: "740112" },
-  { name: "Pakningssæt", quantity: "2", unit: "stk.", itemNo: "183020" }
-];
+const initialControlValues = Object.fromEntries(
+  controlStages.flatMap((stage) =>
+    Object.values(stage.items)
+      .flat()
+      .filter(Boolean)
+      .map((item) => [item.id, false])
+  )
+);
 
 export default function Home() {
-  const [workType, setWorkType] = useState<WorkType>("Reparation");
-  const [currentStep, setCurrentStep] = useState<StepId>("type");
-  const [description, setDescription] = useState("");
+  const [currentStep, setCurrentStep] = useState<StepId>("report");
+  const [selectedInstallations, setSelectedInstallations] = useState<InstallationType[]>([]);
+  const [workKind, setWorkKind] = useState<WorkKind | null>(null);
+  const [customWorkKind, setCustomWorkKind] = useState("");
+  const [controlValues, setControlValues] = useState<Record<string, boolean>>(initialControlValues);
+  const [expandedControlStages, setExpandedControlStages] = useState<string[]>([]);
+  const [customerInfoExpanded, setCustomerInfoExpanded] = useState(false);
+  const [closure, setClosure] = useState<ClosureFlag[]>(["faerdig", "driftVedligehold", "klarTilFaktura"]);
   const [showDescriptionError, setShowDescriptionError] = useState(false);
-  const [materialMode, setMaterialMode] = useState<MaterialMode>("used");
-  const [controlResult, setControlResult] = useState<ControlResult>("ok");
-  const [materials] = useState<MaterialLine[]>(defaultMaterials);
+  const [description, setDescription] = useState("");
 
-  const flow = useMemo(() => FLOW_BY_TYPE[workType], [workType]);
-  const currentIndex = flow.indexOf(currentStep);
-  const stepCount = flow.length - 1;
-  const progress = currentStep === "done" ? 100 : Math.max(8, (Math.max(currentIndex, 0) / stepCount) * 100);
+  const currentIndex = stepOrder.indexOf(currentStep);
+  const stepCount = stepOrder.length - 1;
   const stepText = currentStep === "done" ? "Færdig" : `Trin ${currentIndex + 1} af ${stepCount}`;
+  const progress = currentStep === "done" ? 100 : Math.max(8, (currentIndex / stepCount) * 100);
 
-  function goToStep(step: StepId) {
-    setCurrentStep(step);
-  }
+  const activeControlColumnIds = useMemo(
+    () => getControlColumnsForInstallations(selectedInstallations),
+    [selectedInstallations]
+  );
+
+  const activeControlColumns = useMemo(
+    () => controlColumns.filter((column) => activeControlColumnIds.includes(column.id)),
+    [activeControlColumnIds]
+  );
+
+  const selectedInstallationLabels = useMemo(
+    () =>
+      installationTypes
+        .filter((installation) => selectedInstallations.includes(installation.id))
+        .map((installation) => installation.shortLabel),
+    [selectedInstallations]
+  );
+
+  const selectedWorkKind = workKinds.find((kind) => kind.id === workKind);
+
+  const visibleStages = useMemo(
+    () =>
+      controlStages.filter((stage) =>
+        activeControlColumnIds.some((column) => (stage.items[column]?.length ?? 0) > 0)
+      ),
+    [activeControlColumnIds]
+  );
 
   function goNext() {
-    if (currentStep === "work" && description.trim().length === 0) {
+    if (currentStep === "report" && description.trim().length === 0) {
       setShowDescriptionError(true);
       return;
     }
 
     if (currentStep === "done") {
-      setDescription("");
-      setShowDescriptionError(false);
-      setWorkType("Reparation");
-      setMaterialMode("used");
-      setControlResult("ok");
-      goToStep("type");
+      setCurrentStep("report");
       return;
     }
 
-    const next = flow[Math.min(currentIndex + 1, flow.length - 1)];
-    goToStep(next);
+    setCurrentStep(stepOrder[Math.min(currentIndex + 1, stepOrder.length - 1)]);
   }
 
   function goBack() {
-    const previous = flow[Math.max(currentIndex - 1, 0)];
-    goToStep(previous);
+    setCurrentStep(stepOrder[Math.max(currentIndex - 1, 0)]);
   }
 
-  function handleWorkTypeChange(nextType: WorkType) {
-    setWorkType(nextType);
-    if (!FLOW_BY_TYPE[nextType].includes(currentStep)) {
-      setCurrentStep("type");
-    }
+  function toggleInstallation(id: InstallationType) {
+    setSelectedInstallations((current) => {
+      if (current.includes(id)) {
+        return current.length === 1 ? current : current.filter((item) => item !== id);
+      }
+
+      return [...current, id];
+    });
+  }
+
+  function toggleControlItem(itemId: string) {
+    setControlValues((current) => ({ ...current, [itemId]: !current[itemId] }));
+  }
+
+  function toggleControlStage(stageId: string) {
+    setExpandedControlStages((current) =>
+      current.includes(stageId) ? current.filter((id) => id !== stageId) : [...current, stageId]
+    );
+  }
+
+  function toggleClosureFlag(id: ClosureFlag) {
+    setClosure((current) => {
+      if (id === "ikkeFaerdig") {
+        return current.includes("ikkeFaerdig") ? [] : ["ikkeFaerdig"];
+      }
+
+      const withoutConflict = current.filter((flag) => flag !== "ikkeFaerdig");
+      if (withoutConflict.includes(id)) {
+        return withoutConflict.filter((flag) => flag !== id);
+      }
+
+      return [...withoutConflict, id];
+    });
   }
 
   const primaryLabel =
-    currentStep === "signature" ? "Start signering" : currentStep === "done" ? "Ny seddel" : "Fortsæt";
+    currentStep === "signature" ? "Send til kontoret" : currentStep === "done" ? "Ny rapport" : "Fortsæt";
 
   return (
     <main className="app-shell">
-      <section className="phone" aria-label="Workslip arbejdsseddel demo">
+      <section className="phone" aria-label="4V05 Workslip demo">
         <header className="app-header">
           <div className="topline">
             <button
@@ -131,13 +165,13 @@ export default function Home() {
               type="button"
               aria-label="Gå tilbage"
               onClick={goBack}
-              disabled={currentStep === "type" || currentStep === "done"}
+              disabled={currentStep === "report" || currentStep === "done"}
             >
               <ArrowLeft size={21} strokeWidth={2.4} />
             </button>
             <div className="meta">
               <span>{stepText}</span>
-              <strong>{workType}</strong>
+              <strong>4V05</strong>
             </div>
           </div>
           <div className="progress" aria-hidden="true">
@@ -146,227 +180,232 @@ export default function Home() {
         </header>
 
         <div className="screen">
-          {currentStep === "type" && (
+          {currentStep === "report" && (
             <StepFrame
-              title="Ny arbejdsseddel"
-              lead="Vælg typen af arbejde. Appen viser kun de felter, der er relevante for opgaven."
-              callout="Standard demoen er en reparation med materialer, foto, slutkontrol og signering."
-            >
-              <div className="choice-list" role="radiogroup" aria-label="Arbejdstype">
-                <Choice
-                  active={workType === "Service"}
-                  title="Service"
-                  note="Kort besøg med tid, beskrivelse og signering."
-                  onClick={() => handleWorkTypeChange("Service")}
-                />
-                <Choice
-                  active={workType === "Reparation"}
-                  title="Reparation"
-                  note="Standard demo: tid, arbejde, materialer, foto, slutkontrol og signering."
-                  onClick={() => handleWorkTypeChange("Reparation")}
-                />
-                <Choice
-                  active={workType === "Installation"}
-                  title="Installation"
-                  note="Mere dokumentation: kørsel, billeder og tydelig Q-kontrol."
-                  onClick={() => handleWorkTypeChange("Installation")}
-                />
-              </div>
-            </StepFrame>
-          )}
-
-          {currentStep === "case" && (
-            <StepFrame
-              title="Sag"
-              lead="Vælg kunde og sag. Montøren kan oprette midlertidige oplysninger, hvis kontoret ikke har lagt sagen ind endnu."
+              title="4V05 arbejdsrapport"
+              lead="Kundens faktiske skema starter med kunde, adresse, kontaktperson, dato, rapportnummer og opgavebeskrivelse."
+              callout="Gas-, vand- og sanitetsinstallationer samt servicearbejder på vand- og sanitetsinstallationer."
             >
               <Field label="Kunde">
-                <input defaultValue="Aarhus Ejendomme ApS" autoComplete="off" />
+                <input defaultValue="Aarhus Ejendomme ApS" autoComplete="organization" />
               </Field>
-              <Field label="Sagsnummer / job">
-                <input defaultValue="REP-1048" autoComplete="off" />
-              </Field>
-              <Field label="Arbejdsadresse">
+              <Field label="Adresse">
                 <input defaultValue="Trøjborgvej 12, 8200 Aarhus N" autoComplete="street-address" />
               </Field>
-              <Field label="Dato">
-                <input type="date" defaultValue="2026-05-14" />
-              </Field>
-            </StepFrame>
-          )}
-
-          {currentStep === "time" && (
-            <StepFrame
-              title="Tid"
-              lead="Registrer arbejdstiden. Appen beregner timerne og stopper kun åbenlyse fejl."
-              callout="Beregnet arbejdstid: 3 timer og 0 minutter"
-            >
               <div className="two-column">
-                <Field label="Start">
-                  <input type="time" defaultValue="07:30" />
+                <Field label="Kontaktperson">
+                  <input defaultValue="Mette Jensen" autoComplete="name" />
                 </Field>
-                <Field label="Slut">
-                  <input type="time" defaultValue="10:45" />
+                <Field label="Tlf.">
+                  <input defaultValue="26 75 09 81" inputMode="tel" autoComplete="tel" />
                 </Field>
               </div>
-              <Field label="Pause">
-                <input inputMode="numeric" defaultValue="15 min" />
-              </Field>
-            </StepFrame>
-          )}
-
-          {currentStep === "work" && (
-            <StepFrame
-              title="Arbejde"
-              lead="Beskriv det udførte arbejde, så kontoret kan forstå opgaven uden at ringe tilbage."
-            >
+              <div className="two-column">
+                <Field label="Dato">
+                  <input type="date" defaultValue="2026-05-15" />
+                </Field>
+                <Field label="Rapportnummer">
+                  <input defaultValue="4V05-001" inputMode="numeric" />
+                </Field>
+              </div>
               <Field
-                label="Beskrivelse af udført arbejde"
-                hint="Skriv eller dikter. Eksempel: “Udskiftede defekt bundventil og testede for lækage.”"
-                error={showDescriptionError ? "Skriv hvad du har repareret, før du går videre." : undefined}
+                label="Opgavebeskrivelse"
+                hint="Beskriv sagen kort, så kontrollen senere kan kobles til opgaven."
+                error={showDescriptionError ? "Skriv en opgavebeskrivelse før du går videre." : undefined}
               >
-                <div className="textarea-wrap">
-                  <textarea
-                    value={description}
-                    onChange={(event) => {
-                      setDescription(event.target.value);
-                      if (event.target.value.trim().length > 0) setShowDescriptionError(false);
-                    }}
-                    placeholder="Tryk for at skrive eller diktere..."
-                  />
-                  <button className="dictate-button" type="button" aria-label="Dikter beskrivelse">
-                    <Mic size={18} />
-                    Dikter
-                  </button>
-                </div>
+                <textarea
+                  value={description}
+                  onChange={(event) => {
+                    setDescription(event.target.value);
+                    if (event.target.value.trim().length > 0) setShowDescriptionError(false);
+                  }}
+                  placeholder="Skriv opgavebeskrivelse..."
+                />
               </Field>
-            </StepFrame>
-          )}
-
-          {currentStep === "materials" && (
-            <StepFrame
-              title="Materialer og foto"
-              lead="Tilføj alle materialer der blev brugt på opgaven. Hver linje kan rettes, hvis noget er forkert."
-            >
-              <div className="choice-list compact" role="radiogroup" aria-label="Materialevalg">
-                <Choice
-                  active={materialMode === "used"}
-                  title="Materialer brugt"
-                  note={`${materials.length} linjer tilføjet. Kontoret kan bruge dem til fakturering.`}
-                  onClick={() => setMaterialMode("used")}
-                />
-                <Choice
-                  active={materialMode === "none"}
-                  title="Ingen materialer"
-                  note="Bruges kun hvis arbejdet ikke krævede varer."
-                  onClick={() => setMaterialMode("none")}
-                />
-              </div>
-
-              {materialMode === "used" && (
-                <>
-                  <div className="material-list" aria-label="Materialelinjer">
-                    {materials.map((material) => (
-                      <button className="material-row" type="button" key={material.itemNo}>
-                        <div>
-                          <strong>{material.name}</strong>
-                          <span>
-                            {material.quantity} {material.unit} · Varenr. {material.itemNo}
-                          </span>
-                        </div>
-                        <span className="edit-link">Ret</span>
-                      </button>
-                    ))}
-                    <div className="material-total">
-                      {materials.length} materialelinjer er registreret. Tryk på en linje for at rette den.
-                    </div>
-                  </div>
-
-                  <Field label="Ny materialelinje" hint="Brug dette felt til ekstra materialer, hvis der blev brugt mere.">
-                    <input placeholder="Søg eller skriv materiale" />
+              <section className={`foldable-field ${customerInfoExpanded ? "expanded" : ""}`}>
+                <button
+                  className="foldable-header"
+                  type="button"
+                  aria-expanded={customerInfoExpanded}
+                  onClick={() => setCustomerInfoExpanded((expanded) => !expanded)}
+                >
+                  <span>Oplysninger til kunden / tekniske observationer</span>
+                  <ChevronDown size={20} strokeWidth={2.5} />
+                </button>
+                {customerInfoExpanded && (
+                  <Field
+                    label="Oplysninger"
+                    hint="Brug feltet til observationer, råd eller tekniske forhold kunden skal kende."
+                  >
+                    <textarea placeholder="Skriv oplysninger til kunden eller tekniske observationer..." />
                   </Field>
-
-                  <button className="secondary-action" type="button">
-                    <Plus size={18} />
-                    Tilføj materiale
-                  </button>
-                </>
-              )}
-
-              <button className="secondary-action" type="button">
-                <Camera size={18} />
-                Tilføj billede hvis relevant
-              </button>
+                )}
+              </section>
             </StepFrame>
           )}
 
-          {currentStep === "control" && (
-            <StepFrame title="Slutkontrol" lead="Kontroller arbejdet, før sedlen kan sendes til sikker signering.">
-              <div className="choice-list" role="radiogroup" aria-label="Slutkontrol resultat">
-                <Choice
-                  active={controlResult === "ok"}
-                  title="OK - ingen afvigelse"
-                  note="Arbejdet er kontrolleret og klar til signering."
-                  onClick={() => setControlResult("ok")}
-                />
-                <Choice
-                  active={controlResult === "deviation"}
-                  title="Afvigelse registreret"
-                  note="Kræver note og korrigerende handling."
-                  onClick={() => setControlResult("deviation")}
-                />
+          {currentStep === "categories" && (
+            <StepFrame
+              title="Kategorier"
+              lead="Vælg anlægstype og arbejdstype hurtigt. Kontrolskemaet tilpasses automatisk bagefter."
+            >
+              <section className="category-panel" aria-labelledby="installation-category">
+                <div className="section-heading">
+                  <h2 id="installation-category">Anlægstype</h2>
+                  <p>Vælg en eller flere fra kundens 4V05-skema.</p>
+                </div>
+                <div className="chip-grid" aria-label="Anlægstype">
+                  {installationTypes.map((installation) => {
+                    const active = selectedInstallations.includes(installation.id);
+
+                    return (
+                      <button
+                        key={installation.id}
+                        className={`chip ${active ? "active" : ""}`}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => toggleInstallation(installation.id)}
+                      >
+                        <span>{active && <Check size={15} strokeWidth={3} />}</span>
+                        <strong>{installation.shortLabel}</strong>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="category-panel" aria-labelledby="work-kind-category">
+                <div className="section-heading">
+                  <h2 id="work-kind-category">Arbejdstype</h2>
+                  <p>Vælg den ene kategori der bedst passer.</p>
+                </div>
+                <div className="chip-grid work-kind-grid" role="radiogroup" aria-label="Arbejdstype">
+                  {workKinds.map((kind) => (
+                    <button
+                      key={kind.id}
+                      className={`chip radio-chip ${workKind === kind.id ? "active" : ""}`}
+                      type="button"
+                      role="radio"
+                      aria-checked={workKind === kind.id}
+                      onClick={() => setWorkKind(kind.id)}
+                    >
+                      <strong>{kind.shortLabel}</strong>
+                    </button>
+                  ))}
+                </div>
+                {selectedWorkKind && selectedWorkKind.helper && (
+                  <div className="selected-helper">
+                    <strong>{selectedWorkKind.label}</strong>
+                    <span>{selectedWorkKind.helper}</span>
+                  </div>
+                )}
+                {selectedWorkKind?.requiresCustomText && (
+                  <Field label="Ret opgavetype" hint="Skriv den tekst der skal stå på arbejdssedlen.">
+                    <input
+                      value={customWorkKind}
+                      onChange={(event) => setCustomWorkKind(event.target.value)}
+                      placeholder="Fx serviceeftersyn, fejlsøgning eller rådgivning"
+                    />
+                  </Field>
+                )}
+              </section>
+            </StepFrame>
+          )}
+
+          {currentStep === "controls" && (
+            <StepFrame
+              title="Kontrol"
+              lead="Kontrolpunkterne er foldet ind fra start. Åbn en kategori og sæt flueben ved det, du har kontrolleret."
+            >
+              <div className="selected-columns" aria-label="Valgte anlægstyper">
+                {activeControlColumns.map((column) => (
+                  <span key={column.id}>{column.label}</span>
+                ))}
               </div>
-              <Field label="Kontroltype">
-                <select defaultValue="Visuel kontrol og tæthedstjek">
-                  <option>Visuel kontrol og tæthedstjek</option>
-                  <option>Trykprøvning</option>
-                  <option>Funktionsafprøvning</option>
-                </select>
+              <div className="control-stages">
+                {visibleStages.map((stage) => (
+                  <ControlStageCard
+                    key={stage.id}
+                    stage={stage}
+                    columns={activeControlColumnIds}
+                    expanded={expandedControlStages.includes(stage.id)}
+                    values={controlValues}
+                    onToggleStage={() => toggleControlStage(stage.id)}
+                    onToggleItem={toggleControlItem}
+                  />
+                ))}
+              </div>
+              <Field label="Bemærkninger">
+                <textarea placeholder="Tilføj tekniske observationer eller afvigelser..." />
               </Field>
-              <Field label="Slutkontrol udført af">
-                <input defaultValue="Rasmus, montør" />
-              </Field>
+            </StepFrame>
+          )}
+
+          {currentStep === "closure" && (
+            <StepFrame
+              title="Afslutning af sag"
+              lead="Marker sagens status og hvilke dokumenter der følger med. Ikke færdig kan ikke kombineres med færdig eller klar til faktura."
+            >
+              <div className="closure-grid" aria-label="Afslutning af sag">
+                {closureFlags.map((flag) => (
+                  <button
+                    key={flag.id}
+                    type="button"
+                    className={`check-choice ${closure.includes(flag.id) ? "active" : ""}`}
+                    onClick={() => toggleClosureFlag(flag.id)}
+                  >
+                    <span>{closure.includes(flag.id) && <Check size={16} strokeWidth={3} />}</span>
+                    {flag.label}
+                  </button>
+                ))}
+              </div>
             </StepFrame>
           )}
 
           {currentStep === "signature" && (
             <StepFrame
-              title="Sikker signering"
-              lead="Demoen simulerer en leverandørneutral sikker signering uden at binde produktet til MitID, Adobe eller andre leverandører."
-              callout="Når signeringen er gennemført, låses arbejdssedlen og sendes til kontoret."
+              title="Underskrift - Montør"
+              lead="Kundens 4V05-skema afsluttes med dato og montørunderskrift. Dette trin handler kun om montørens underskrift."
+              callout="Efter underskrift låses rapporten og kan sendes til kontoret."
             >
-              <Field label="Underskriverens navn">
-                <input defaultValue="Mette Jensen" />
+              <Field label="Dato">
+                <input type="date" defaultValue="2026-05-15" />
               </Field>
-              <Field label="Rolle">
-                <select defaultValue="Kunde">
-                  <option>Kunde</option>
-                  <option>Slutbruger</option>
-                  <option>Intern ansvarlig</option>
-                </select>
+              <Field label="Montør">
+                <input defaultValue="Niels Petersen" autoComplete="name" />
               </Field>
+              <button className="signature-pad" type="button">
+                <PenLine size={24} />
+                Tryk for montørunderskrift
+              </button>
             </StepFrame>
           )}
 
           {currentStep === "done" && (
             <StepFrame
-              title="Sendt til kontoret"
-              lead="Arbejdssedlen er signeret, låst og klar til kontorets gennemgang."
+              title="Rapport sendt"
+              lead="4V05 arbejdsrapporten er udfyldt, underskrevet af montør og klar til kontorets gennemgang."
             >
               <div className="done-panel">
                 <div className="done-mark">
                   <Check size={26} strokeWidth={3} />
                 </div>
-                <h2>Arbejdsseddel sendt</h2>
-                <p>Kontoret kan nu gennemgå sedlen, eksportere PDF og gøre den klar til fakturering.</p>
+                <h2>4V05 klar til kontoret</h2>
+                <p>Kontoret kan nu gennemgå kontrolpunkter, bemærkninger og afslutningsstatus.</p>
               </div>
               <div className="summary-box">
-                <SummaryRow label="Type" value={workType} />
-                <SummaryRow label="Sag" value="REP-1048" />
-                <SummaryRow label="Tid" value="3 timer" />
-                <SummaryRow label="Materialer" value={materialMode === "used" ? `${materials.length} linjer` : "Ingen"} />
-                <SummaryRow label="Slutkontrol" value={controlResult === "ok" ? "OK - ingen afvigelse" : "Afvigelse"} />
-                <SummaryRow label="Signering" value="Mette Jensen, kunde" />
+                <SummaryRow label="Rapport" value="4V05-001" />
+                <SummaryRow label="Anlægstype" value={selectedInstallationLabels.join(", ") || "Ikke valgt"} />
+                <SummaryRow
+                  label="Arbejdstype"
+                  value={
+                    selectedWorkKind?.requiresCustomText
+                      ? customWorkKind || "Andet"
+                      : selectedWorkKind?.label ?? "Ikke valgt"
+                  }
+                />
+                <SummaryRow label="Afslutning" value={closure.map((flag) => closureFlags.find((item) => item.id === flag)?.label).join(", ")} />
+                <SummaryRow label="Signering" value="Niels Petersen, montør" />
               </div>
             </StepFrame>
           )}
@@ -375,7 +414,7 @@ export default function Home() {
         <footer className="bottom-bar">
           <div>
             <span>{stepText}</span>
-            <strong>{currentStep === "done" ? "Færdig" : `Næste: ${NEXT_LABELS[currentStep]}`}</strong>
+            <strong>{currentStep === "done" ? "Færdig" : `Næste: ${nextLabels[currentStep]}`}</strong>
           </div>
           <button type="button" onClick={goNext}>
             {primaryLabel}
@@ -386,22 +425,19 @@ export default function Home() {
 
       <aside className="desktop-context" aria-label="Demo overblik">
         <div className="context-card">
-          <Wrench size={24} />
-          <h2>Workslip demo</h2>
-          <p>
-            Mobil-first PWA til digitale arbejdssedler. Demoen viser en VVS-reparation fra oprettelse til
-            signering.
-          </p>
+          <ClipboardCheck size={24} />
+          <h2>4V05 som source of truth</h2>
+          <p>Flowet følger kundens arbejdsrapport i stedet for en generisk materialeliste.</p>
         </div>
         <div className="context-card">
-          <ListPlus size={24} />
-          <h2>Formprincip</h2>
-          <p>Én logisk opgave ad gangen, store felter og kun relevante trin for den valgte arbejdstype.</p>
+          <Wrench size={24} />
+          <h2>Relevante kontroller</h2>
+          <p>Valgt anlægstype styrer hvilke kontrolpunkter montøren ser.</p>
         </div>
         <div className="context-card">
           <FileSignature size={24} />
-          <h2>Compliance</h2>
-          <p>Slutkontrol og sikker signering er separate trin, så sedlen bliver klar til kontoret.</p>
+          <h2>Montørunderskrift</h2>
+          <p>Rapporten afsluttes med montørens underskrift, som i kundens PDF.</p>
         </div>
       </aside>
     </main>
@@ -433,28 +469,6 @@ function StepFrame({
   );
 }
 
-function Choice({
-  active,
-  title,
-  note,
-  onClick
-}: {
-  active: boolean;
-  title: string;
-  note: string;
-  onClick: () => void;
-}) {
-  return (
-    <button className={`choice ${active ? "active" : ""}`} type="button" onClick={onClick}>
-      <div>
-        <strong>{title}</strong>
-        <span>{note}</span>
-      </div>
-      <i aria-hidden="true" />
-    </button>
-  );
-}
-
 function Field({
   label,
   hint,
@@ -473,6 +487,84 @@ function Field({
       {children}
       {error && <span className="error-text">{error}</span>}
     </label>
+  );
+}
+
+function ControlStageCard({
+  stage,
+  columns,
+  expanded,
+  values,
+  onToggleStage,
+  onToggleItem
+}: {
+  stage: ControlStage;
+  columns: ActiveControlColumn[];
+  expanded: boolean;
+  values: Record<string, boolean>;
+  onToggleStage: () => void;
+  onToggleItem: (itemId: string) => void;
+}) {
+  const itemCount = columns.reduce((count, column) => count + (stage.items[column]?.length ?? 0), 0);
+  const checkedCount = columns.reduce(
+    (count, column) => count + (stage.items[column] ?? []).filter((item) => values[item.id]).length,
+    0
+  );
+
+  return (
+    <article className={`control-stage ${expanded ? "expanded" : ""}`}>
+      <button className="control-stage-header" type="button" aria-expanded={expanded} onClick={onToggleStage}>
+        <div>
+          <h2>{stage.title}</h2>
+          <span>
+            {checkedCount} af {itemCount} markeret
+          </span>
+        </div>
+        <ChevronDown size={20} strokeWidth={2.5} />
+      </button>
+      {expanded && (
+        <div className="control-columns">
+          {columns.map((column) => {
+            const columnConfig = controlColumns.find((item) => item.id === column);
+            const items = stage.items[column] ?? [];
+            if (items.length === 0) return null;
+
+            return (
+              <section className="control-column" key={`${stage.id}-${column}`}>
+                <h3>{columnConfig?.label}</h3>
+                <div className="control-items">
+                  {items.map((item) => (
+                    <ControlItemRow
+                      key={item.id}
+                      item={item}
+                      checked={values[item.id] ?? false}
+                      onToggle={() => onToggleItem(item.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function ControlItemRow({
+  item,
+  checked,
+  onToggle
+}: {
+  item: ControlItem;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button className={`control-item ${checked ? "checked" : ""}`} type="button" onClick={onToggle}>
+      <span>{checked && <Check size={16} strokeWidth={3} />}</span>
+      <strong>{item.label}</strong>
+    </button>
   );
 }
 

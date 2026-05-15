@@ -1,3 +1,4 @@
+param companyName string = 'TEMPLATE'
 param location string = resourceGroup().location
 param environment string = 'dev'
 param notificationEmail string = ''
@@ -12,7 +13,7 @@ param documentIntelligenceName string = 'di-docfeeder-${toLower(environment)}'
 
 var tags = {
   environment: environment
-  project: 'document-feeder'
+  project: companyName
 }
 
 // ──────────────────────────────────────────────
@@ -208,7 +209,6 @@ resource blobConnection 'Microsoft.Web/connections@2016-06-01' = {
   properties: {
     displayName: 'Blob Connection'
     api: { id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureblob') }
-    parameterValueType: 'Alternative'
     parameterValues: {
       authType: 'ManagedServiceIdentity'
       identityId: identity.id
@@ -223,7 +223,6 @@ resource eventGridConnection 'Microsoft.Web/connections@2016-06-01' = {
   properties: {
     displayName: 'Event Grid Connection'
     api: { id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureeventgrid') }
-    parameterValueType: 'Alternative'
     parameterValues: {
       authType: 'ManagedServiceIdentity'
       identityId: identity.id
@@ -238,7 +237,6 @@ resource documentIntelligenceConnection 'Microsoft.Web/connections@2016-06-01' =
   properties: {
     displayName: 'Document Intelligence Connection'
     api: { id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'formrecognizer') }
-    parameterValueType: 'Alternative'
     parameterValues: {
       authType: 'ManagedServiceIdentity'
       identityId: identity.id
@@ -253,7 +251,6 @@ resource outlookConnection 'Microsoft.Web/connections@2016-06-01' = {
   properties: {
     displayName: 'Outlook Connection'
     api: { id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'outlook') }
-    parameterValueType: 'Alternative'
     parameterValues: {
       authType: 'ManagedServiceIdentity'
       identityId: identity.id

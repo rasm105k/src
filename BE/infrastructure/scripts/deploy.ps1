@@ -5,12 +5,13 @@ param(
     [string]$Location = "westeurope"
 )
 
+$COMPANY_NAME = "TEMPLATE"
 $ErrorActionPreference = "Stop"
-$RESOURCE_GROUP = "rg-docfeeder-$Environment"
+$RESOURCE_GROUP = "rg-$COMPANY_NAME-$Environment"
 $INFRA_DIR = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $TEMPLATE = Join-Path $INFRA_DIR "main.bicep"
 $PARAMETERS = Join-Path $INFRA_DIR "parameters.$Environment.json"
-$DEPLOY_NAME = "docfeeder-$Environment-$(Get-Date -Format 'yyyyMMddHHmmss')"
+$DEPLOY_NAME = "$COMPANY_NAME-$Environment-$(Get-Date -Format 'yyyyMMddHHmmss')"
 
 # ─── checks ───────────────────────────────────────────
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
