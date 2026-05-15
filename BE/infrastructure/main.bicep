@@ -28,6 +28,18 @@ var tags = {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// User-Assigned Managed Identity
+// One identity, shared by all resources. All RBAC is granted to this identity.
+// ──────────────────────────────────────────────────────────────────────────────
+
+resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: identityName
+  location: location
+  tags: tags
+}
+
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Monitoring
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -35,6 +47,10 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: logAnalyticsName
   location: location
   tags: tags
+   identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: { '${identity.id}': {} }
+  }
   properties: {
     sku: { name: 'PerGB2018' }
     retentionInDays: 30
@@ -50,17 +66,6 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
     Application_Type: 'web'
     WorkspaceResourceId: logAnalytics.id
   }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// User-Assigned Managed Identity
-// One identity, shared by all resources. All RBAC is granted to this identity.
-// ──────────────────────────────────────────────────────────────────────────────
-
-resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: identityName
-  location: location
-  tags: tags
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -174,7 +179,7 @@ resource documentIntelligence 'Microsoft.CognitiveServices/accounts@2023-05-01' 
     userAssignedIdentities: { '${identity.id}': {} }
   }
   properties: {
-    restore: false
+    restore: true
     customSubDomainName: documentIntelligenceName
     publicNetworkAccess: 'Enabled'
   }
