@@ -879,6 +879,104 @@ select:focus {
   line-height: 1.28;
 }
 
+/* Compact summary variants for signature step */
+.summary-box.sm {
+  margin-top: 0;
+  padding: 11px 13px;
+  gap: 7px;
+}
+
+.summary-row.sm {
+  padding-bottom: 6px;
+  gap: 10px;
+}
+
+.summary-row.sm span {
+  font-size: 12px;
+}
+
+.summary-row.sm strong {
+  font-size: 12px;
+}
+
+/* Collapsible stage rows in summary */
+.summary-stage-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 850;
+  text-align: left;
+}
+
+.summary-stage-header + .summary-stage-header {
+  border-top: 1px solid #eef2f7;
+}
+
+.summary-stage-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.stage-chevron {
+  flex: 0 0 auto;
+  transition: transform 160ms ease;
+}
+
+.stage-chevron.open {
+  transform: rotate(0deg);
+}
+
+.stage-chevron:not(.open) {
+  transform: rotate(-90deg);
+}
+
+.summary-stage-count {
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.summary-stage-items {
+  padding: 2px 0 6px 20px;
+  display: grid;
+  gap: 5px;
+}
+
+.summary-col-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 850;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--text);
+  padding: 1px 0;
+}
+
+.summary-item svg {
+  color: var(--green);
+  flex: 0 0 auto;
+}
+
 .bottom-bar {
   position: absolute;
   left: 18px;
@@ -1006,7 +1104,86 @@ p.bottom-error {
     display: none;
   }
 
-  .bottom-bar {
+.signature-area {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+/* Confirmation modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  padding: 24px;
+  animation: fadeIn 150ms ease;
+}
+
+.modal-dialog {
+  background: #fff;
+  border-radius: 24px;
+  padding: 28px 24px 20px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  animation: scaleIn 180ms ease;
+}
+
+.modal-dialog h2 {
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.modal-dialog p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 750;
+}
+
+.modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.modal-btn {
+  min-height: 48px;
+  border-radius: 14px;
+  border: 0;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.modal-btn.secondary {
+  background: #f2f4f7;
+  color: var(--text);
+}
+
+.modal-btn.primary {
+  background: var(--dark);
+  color: #fff;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.93); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.bottom-bar {
     left: 12px;
     right: 12px;
     bottom: 10px;

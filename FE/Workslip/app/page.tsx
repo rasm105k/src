@@ -71,6 +71,15 @@ export default function Home() {
   const [closureError, setClosureError] = useState("");
   const [showDescriptionError, setShowDescriptionError] = useState(false);
   const [description, setDescription] = useState("");
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [customerName, setCustomerName] = useState("Aarhus Ejendomme ApS");
+  const [address, setAddress] = useState("Trøjborgvej 12, 8200 Aarhus N");
+  const [contactPerson, setContactPerson] = useState("Mette Jensen");
+  const [phone, setPhone] = useState("26 75 09 81");
+  const [date, setDate] = useState("2026-05-15");
+  const [reportNumber, setReportNumber] = useState("4V05-001");
+  const [customerNotes, setCustomerNotes] = useState("");
+  const [expandedSummaryStages, setExpandedSummaryStages] = useState<string[]>([]);
 
   const currentIndex = stepOrder.indexOf(currentStep);
   const stepCount = stepOrder.length - 1;
@@ -145,6 +154,11 @@ export default function Home() {
     }
     setClosureError("");
 
+    if (currentStep === "signature") {
+      setShowConfirmDialog(true);
+      return;
+    }
+
     if (currentStep === "done") {
       setCurrentStep("report");
       return;
@@ -196,6 +210,19 @@ export default function Home() {
     });
   }
 
+  const controlStageSummary = useMemo(
+    () =>
+      visibleStages
+        .map((stage) => {
+          const columns = activeControlColumnIds.filter((col) => (stage.items[col]?.length ?? 0) > 0);
+          const allItems = columns.flatMap((col) => stage.items[col] ?? []);
+          const checkedItems = allItems.filter((item) => controlValues[item.id]);
+          return { stage, columns, checkedItems, totalItems: allItems.length, checkedCount: checkedItems.length };
+        })
+        .filter((s) => s.checkedCount > 0),
+    [visibleStages, activeControlColumnIds, controlValues]
+  );
+
   const primaryLabel =
     currentStep === "signature" ? "Send til kontoret" : currentStep === "done" ? "Ny rapport" : "Fortsæt";
 
@@ -229,25 +256,25 @@ export default function Home() {
               title="4V05 arbejdsrapport"
             >
               <Field label="Kunde">
-                <input defaultValue="Aarhus Ejendomme ApS" autoComplete="organization" />
+                <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} autoComplete="organization" />
               </Field>
               <Field label="Adresse">
-                <input defaultValue="Trøjborgvej 12, 8200 Aarhus N" autoComplete="street-address" />
+                <input value={address} onChange={(e) => setAddress(e.target.value)} autoComplete="street-address" />
               </Field>
               <div className="two-column">
                 <Field label="Kontaktperson">
-                  <input defaultValue="Mette Jensen" autoComplete="name" />
+                  <input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} autoComplete="name" />
                 </Field>
                 <Field label="Tlf.">
-                  <input defaultValue="26 75 09 81" inputMode="tel" autoComplete="tel" />
+                  <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" />
                 </Field>
               </div>
               <div className="two-column">
                 <Field label="Dato">
-                  <input type="date" defaultValue="2026-05-15" />
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 </Field>
                 <Field label="Rapportnummer">
-                  <input defaultValue="4V05-001" inputMode="numeric" />
+                  <input value={reportNumber} onChange={(e) => setReportNumber(e.target.value)} inputMode="numeric" />
                 </Field>
               </div>
               <Field
@@ -278,7 +305,7 @@ export default function Home() {
                     label="Oplysninger"
                     hint="Brug feltet til observationer, råd eller tekniske forhold kunden skal kende."
                   >
-                    <textarea placeholder="Skriv oplysninger til kunden eller tekniske observationer..." />
+                    <textarea value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} placeholder="Skriv oplysninger til kunden eller tekniske observationer..." />
                   </Field>
                 )}
               </section>
@@ -412,20 +439,122 @@ export default function Home() {
 
           {currentStep === "signature" && (
             <StepFrame
-              title="Underskrift - Montør"
-              lead="Kundens 4V05-skema afsluttes med dato og montørunderskrift. Dette trin handler kun om montørens underskrift."
-              callout="Efter underskrift låses rapporten og kan sendes til kontoret."
+              title="Godkend og signér"
+              lead="Gennemgå rapporten og underskriv før indsendelse til kontoret."
             >
-              <Field label="Dato">
-                <input type="date" defaultValue="2026-05-15" />
-              </Field>
-              <Field label="Montør">
-                <input defaultValue="Niels Petersen" autoComplete="name" />
-              </Field>
-              <button className="signature-pad" type="button">
-                <PenLine size={24} />
-                Tryk for montørunderskrift
-              </button>
+              <div className="summary-box sm">
+                <SummaryRow label="Kunde" value={customerName} />
+                <SummaryRow label="Adresse" value={address} />
+                <div className="summary-row sm">
+                  <span>Kontakt</span>
+                  <strong>{contactPerson} · {phone}</strong>
+                </div>
+                <SummaryRow label="Dato" value={date} />
+                <SummaryRow label="Rapport" value={reportNumber} />
+                <SummaryRow label="Anlæg" value={selectedInstallationLabels.join(", ") || "Ikke valgt"} />
+                <SummaryRow
+                  label="Arbejdstype"
+                  value={
+                    selectedWorkKind?.requiresCustomText
+                      ? customWorkKind || "Andet"
+                      : selectedWorkKind?.label ?? "Ikke valgt"
+                  }
+                />
+                {description && <SummaryRow label="Beskrivelse" value={description} />}
+                {customerNotes && <SummaryRow label="Noter" value={customerNotes} />}
+              </div>
+
+              {controlStageSummary.length > 0 && (
+                <div className="summary-box sm" style={{ marginTop: 10 }}>
+                  {controlStageSummary.map(({ stage, columns, checkedItems, checkedCount, totalItems }) => {
+                    const isExpanded = expandedSummaryStages.includes(stage.id);
+                    return (
+                      <div key={stage.id}>
+                        <button
+                          className="summary-stage-header"
+                          type="button"
+                          onClick={() =>
+                            setExpandedSummaryStages((prev) =>
+                              prev.includes(stage.id) ? prev.filter((id) => id !== stage.id) : [...prev, stage.id]
+                            )
+                          }
+                        >
+                          <span className="summary-stage-label">
+                            <ChevronDown size={14} strokeWidth={2.5} className={`stage-chevron ${isExpanded ? "open" : ""}`} />
+                            {stage.title}
+                          </span>
+                          <span className="summary-stage-count">{checkedCount}/{totalItems}</span>
+                        </button>
+                        {isExpanded && (
+                          <div className="summary-stage-items">
+                            {columns.map((col) => {
+                              const columnLabel = controlColumns.find((c) => c.id === col)?.label;
+                              const items = (stage.items[col] ?? []).filter((item) => checkedItems.some((ci) => ci.id === item.id));
+                              if (items.length === 0) return null;
+                              return (
+                                <div key={col} className="summary-col-group">
+                                  <span className="summary-col-label">{columnLabel}</span>
+                                  {items.map((item) => (
+                                    <div key={item.id} className="summary-item">
+                                      <Check size={12} strokeWidth={3} />
+                                      {item.label}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {closure.length > 0 && (
+                <div className="summary-box sm" style={{ marginTop: 10 }}>
+                  <SummaryRow
+                    label="Afslutning"
+                    value={closure.map((flag) => closureFlags.find((item) => item.id === flag)?.label).join(", ")}
+                  />
+                </div>
+              )}
+
+              <div className="signature-area">
+                <Field label="Dato">
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                </Field>
+                <Field label="Montør">
+                  <input defaultValue="Niels Petersen" autoComplete="name" />
+                </Field>
+                <button className="signature-pad" type="button">
+                  <PenLine size={24} />
+                  Underskrift
+                </button>
+              </div>
+
+              {showConfirmDialog && (
+                <div className="modal-overlay" onClick={() => setShowConfirmDialog(false)}>
+                  <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+                    <h2>Send rapport til kontoret?</h2>
+                    <p>Er du sikker på at rapporten er korrekt udfyldt og klar til gennemgang?</p>
+                    <div className="modal-actions">
+                      <button className="modal-btn secondary" onClick={() => setShowConfirmDialog(false)}>
+                        Annuller
+                      </button>
+                      <button
+                        className="modal-btn primary"
+                        onClick={() => {
+                          setShowConfirmDialog(false);
+                          setCurrentStep("done");
+                        }}
+                      >
+                        Ja, send
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </StepFrame>
           )}
 
@@ -441,9 +570,17 @@ export default function Home() {
                 <h2>4V05 klar til kontoret</h2>
                 <p>Kontoret kan nu gennemgå kontrolpunkter, bemærkninger og afslutningsstatus.</p>
               </div>
-              <div className="summary-box">
-                <SummaryRow label="Rapport" value="4V05-001" />
-                <SummaryRow label="Anlægstype" value={selectedInstallationLabels.join(", ") || "Ikke valgt"} />
+
+              <div className="summary-box sm" style={{ marginTop: 14 }}>
+                <SummaryRow label="Kunde" value={customerName} />
+                <SummaryRow label="Adresse" value={address} />
+                <div className="summary-row sm">
+                  <span>Kontakt</span>
+                  <strong>{contactPerson} · {phone}</strong>
+                </div>
+                <SummaryRow label="Dato" value={date} />
+                <SummaryRow label="Rapport" value={reportNumber} />
+                <SummaryRow label="Anlæg" value={selectedInstallationLabels.join(", ") || "Ikke valgt"} />
                 <SummaryRow
                   label="Arbejdstype"
                   value={
@@ -452,9 +589,66 @@ export default function Home() {
                       : selectedWorkKind?.label ?? "Ikke valgt"
                   }
                 />
-                <SummaryRow label="Afslutning" value={closure.map((flag) => closureFlags.find((item) => item.id === flag)?.label).join(", ")} />
-                <SummaryRow label="Signering" value="Niels Petersen, montør" />
+                {description && <SummaryRow label="Beskrivelse" value={description} />}
+                {customerNotes && <SummaryRow label="Noter" value={customerNotes} />}
               </div>
+
+              {controlStageSummary.length > 0 && (
+                <div className="summary-box sm" style={{ marginTop: 10 }}>
+                  {controlStageSummary.map(({ stage, columns, checkedItems, checkedCount, totalItems }) => {
+                    const isExpanded = expandedSummaryStages.includes(stage.id);
+                    return (
+                      <div key={stage.id}>
+                        <button
+                          className="summary-stage-header"
+                          type="button"
+                          onClick={() =>
+                            setExpandedSummaryStages((prev) =>
+                              prev.includes(stage.id) ? prev.filter((id) => id !== stage.id) : [...prev, stage.id]
+                            )
+                          }
+                        >
+                          <span className="summary-stage-label">
+                            <ChevronDown size={14} strokeWidth={2.5} className={`stage-chevron ${isExpanded ? "open" : ""}`} />
+                            {stage.title}
+                          </span>
+                          <span className="summary-stage-count">{checkedCount}/{totalItems}</span>
+                        </button>
+                        {isExpanded && (
+                          <div className="summary-stage-items">
+                            {columns.map((col) => {
+                              const columnLabel = controlColumns.find((c) => c.id === col)?.label;
+                              const items = (stage.items[col] ?? []).filter((item) => checkedItems.some((ci) => ci.id === item.id));
+                              if (items.length === 0) return null;
+                              return (
+                                <div key={col} className="summary-col-group">
+                                  <span className="summary-col-label">{columnLabel}</span>
+                                  {items.map((item) => (
+                                    <div key={item.id} className="summary-item">
+                                      <Check size={12} strokeWidth={3} />
+                                      {item.label}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {closure.length > 0 && (
+                <div className="summary-box sm" style={{ marginTop: 10 }}>
+                  <SummaryRow
+                    label="Afslutning"
+                    value={closure.map((flag) => closureFlags.find((item) => item.id === flag)?.label).join(", ")}
+                  />
+                  <SummaryRow label="Signering" value="Niels Petersen, montør" />
+                </div>
+              )}
             </StepFrame>
           )}
         </div>
