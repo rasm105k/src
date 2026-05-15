@@ -16,6 +16,7 @@ import {
   controlColumns,
   controlStages,
   getControlColumnsForInstallations,
+  getControlStageValidationErrors,
   installationTypes,
   workKinds,
   type ActiveControlColumn,
@@ -61,6 +62,8 @@ export default function Home() {
   const [customWorkKind, setCustomWorkKind] = useState("");
   const [controlValues, setControlValues] = useState<Record<string, boolean>>(initialControlValues);
   const [expandedControlStages, setExpandedControlStages] = useState<string[]>([]);
+  const [selectedControlStages, setSelectedControlStages] = useState<string[]>([]);
+  const [controlStageErrors, setControlStageErrors] = useState<Record<string, string>>({});
   const [customerInfoExpanded, setCustomerInfoExpanded] = useState(false);
   const [closure, setClosure] = useState<ClosureFlag[]>(["faerdig", "driftVedligehold", "klarTilFaktura"]);
   const [showDescriptionError, setShowDescriptionError] = useState(false);
@@ -105,6 +108,22 @@ export default function Home() {
       return;
     }
 
+    if (currentStep === "controls") {
+      const errors = getControlStageValidationErrors({
+        selectedStageIds: selectedControlStages,
+        checkedItemIds: Object.entries(controlValues)
+          .filter(([, checked]) => checked)
+          .map(([itemId]) => itemId),
+        activeColumns: activeControlColumnIds
+      });
+
+      setControlStageErrors(errors);
+      if (Object.keys(errors).length > 0) {
+        setExpandedControlStages((current) => Array.from(new Set([...current, ...Object.keys(errors)])));
+        return;
+      }
+    }
+
     if (currentStep === "done") {
       setCurrentStep("report");
       return;
@@ -129,9 +148,21 @@ export default function Home() {
 
   function toggleControlItem(itemId: string) {
     setControlValues((current) => ({ ...current, [itemId]: !current[itemId] }));
+    setControlStageErrors((current) => {
+      const stage = controlStages.find((candidate) =>
+        Object.values(candidate.items)
+          .flat()
+          .some((item) => item.id === itemId)
+      );
+      if (!stage || !current[stage.id]) return current;
+
+      const { [stage.id]: _removed, ...remaining } = current;
+      return remaining;
+    });
   }
 
   function toggleControlStage(stageId: string) {
+    setSelectedControlStages((current) => (current.includes(stageId) ? current : [...current, stageId]));
     setExpandedControlStages((current) =>
       current.includes(stageId) ? current.filter((id) => id !== stageId) : [...current, stageId]
     );
@@ -329,6 +360,8 @@ export default function Home() {
                     stage={stage}
                     columns={activeControlColumnIds}
                     expanded={expandedControlStages.includes(stage.id)}
+                    selected={selectedControlStages.includes(stage.id)}
+                    error={controlStageErrors[stage.id]}
                     values={controlValues}
                     onToggleStage={() => toggleControlStage(stage.id)}
                     onToggleItem={toggleControlItem}
@@ -494,6 +527,8 @@ function ControlStageCard({
   stage,
   columns,
   expanded,
+  selected,
+  error,
   values,
   onToggleStage,
   onToggleItem
@@ -501,6 +536,8 @@ function ControlStageCard({
   stage: ControlStage;
   columns: ActiveControlColumn[];
   expanded: boolean;
+  selected: boolean;
+  error?: string;
   values: Record<string, boolean>;
   onToggleStage: () => void;
   onToggleItem: (itemId: string) => void;
@@ -512,16 +549,17 @@ function ControlStageCard({
   );
 
   return (
-    <article className={`control-stage ${expanded ? "expanded" : ""}`}>
+    <article className={`control-stage ${expanded ? "expanded" : ""} ${error ? "error" : ""}`}>
       <button className="control-stage-header" type="button" aria-expanded={expanded} onClick={onToggleStage}>
         <div>
           <h2>{stage.title}</h2>
           <span>
-            {checkedCount} af {itemCount} markeret
+            {selected ? `${checkedCount} af ${itemCount} markeret` : `${itemCount} underkategorier`}
           </span>
         </div>
         <ChevronDown size={20} strokeWidth={2.5} />
       </button>
+      {error && <p className="control-stage-error">{error}</p>}
       {expanded && (
         <div className="control-columns">
           {columns.map((column) => {

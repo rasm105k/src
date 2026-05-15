@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  controlStages,
   controlStates,
   getControlColumnsForInstallations,
+  getControlStageValidationErrors,
   installationTypes,
   workKinds,
   type ActiveControlColumn,
@@ -44,5 +46,82 @@ describe("4V05 installation categories", () => {
 
   it("uses a single checkbox state for control items", () => {
     assert.deepEqual(controlStates, ["checked"]);
+  });
+
+  it("matches the customer PDF control categories exactly", () => {
+    const actual = Object.fromEntries(
+      controlStages.map((stage) => [
+        stage.title,
+        {
+          gasVarme: stage.items.gasVarme?.map((item) => item.label) ?? [],
+          vand: stage.items.vand?.map((item) => item.label) ?? [],
+          aflob: stage.items.aflob?.map((item) => item.label) ?? []
+        }
+      ])
+    );
+
+    assert.deepEqual(actual, {
+      "Forundersøgelse": {
+        gasVarme: ["Ansøgning på gas"],
+        vand: ["Ansøgning på vand", "Vandkvalitet"],
+        aflob: ["Ansøgning på afløb", "Fald på ledninger", "Udluftninger over tag", "Vakuumventiler"]
+      },
+      "Modtagekontrol": {
+        gasVarme: ["Rør og fittings", "Armaturer", "Kedel / VVB", "Særlige komponenter"],
+        vand: ["Rør og fittings", "Armaturer", "VVB / veksler", "Særlige komponenter"],
+        aflob: ["Rør og fittings", "Installationsgenstande", "Særlige komponenter"]
+      },
+      "Udførelseskontrol": {
+        gasVarme: ["Stikledning og indføring", "Rørophæng", "Tilslutning til varmtvandsforsyning"],
+        vand: [
+          "Stikledning og indføring",
+          "Fordeler omløber fastsp.",
+          "Samling af koblingsdåser",
+          "Tilslutning til varmtvandsforsyning",
+          "Fittings presset, samlet, loddet.",
+          "Rør i vater og lod"
+        ],
+        aflob: ["Installationsgenstande", "Fald på ledninger"]
+      },
+      "Slutkontrol": {
+        gasVarme: ["Tæthedsprøvning", "Funktionsafprøvning", "Sikkerhedsarmaturer", "Optælling af materialer"],
+        vand: [
+          "Trykprøvning",
+          "Afprøvning af tapsteder",
+          "Varmtvandstemp.",
+          "Cirkulation",
+          "Sikkerhedsarmaturer",
+          "Optælling af materialer"
+        ],
+        aflob: ["Tæthedsprøvning", "Afprøvning af installationsgenstande", "Optælling af materialer"]
+      },
+      "Drift og vedligehold": {
+        gasVarme: ["Driftsinstruktion", "Vedligeholdsinstruktion", "Ventiler og komponenter", "Særlige komponenter"],
+        vand: ["Driftsinstruktion", "Vedligeholdsinstruktion", "Ventiler og armaturer", "Særlige komponenter"],
+        aflob: ["Driftsinstruktion", "Vedligeholdsinstruktion", "Brugervejledning", "Særlige komponenter"]
+      }
+    });
+  });
+
+  it("requires a selected control category to have at least one checked subcategory", () => {
+    const errors = getControlStageValidationErrors({
+      selectedStageIds: ["slutkontrol"],
+      checkedItemIds: [],
+      activeColumns: ["vand"]
+    });
+
+    assert.deepEqual(errors, {
+      slutkontrol: "Vælg mindst én underkategori i Slutkontrol."
+    });
+  });
+
+  it("accepts a selected control category when one relevant subcategory is checked", () => {
+    const errors = getControlStageValidationErrors({
+      selectedStageIds: ["slutkontrol"],
+      checkedItemIds: ["vand-trykproevning"],
+      activeColumns: ["vand"]
+    });
+
+    assert.deepEqual(errors, {});
   });
 });

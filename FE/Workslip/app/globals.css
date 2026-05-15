@@ -690,6 +690,24 @@ select:focus {
   transform: rotate(180deg);
 }
 
+.control-stage.error {
+  border-color: var(--red);
+}
+
+.control-stage.error .control-stage-header {
+  background: #fff8f7;
+}
+
+.control-stage-error {
+  border-top: 1px solid rgba(180, 35, 24, 0.18);
+  background: #fff8f7;
+  color: var(--red);
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 850;
+  padding: 10px 15px;
+}
+
 .control-columns {
   display: grid;
   gap: 12px;
