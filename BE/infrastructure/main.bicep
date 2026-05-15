@@ -23,6 +23,7 @@ param workslipSqlAdminPassword string = ''
 param workslipApiSkuName string       = 'B1'
 param workslipSqlSkuName string       = 'Basic'
 param workslipSqlAllowedIpRanges array = []
+param workslipSqlLocation string = location
 
 // ── Role definition IDs ───────────────────────────────────────────────────────
 // Centralised here so they're easy to audit and update.
@@ -59,12 +60,8 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: logAnalyticsName
   location: location
   tags: tags
-   identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: { '${identity.id}': {} }
-  }
+  sku: { name: 'PerGB2018' }
   properties: {
-    sku: { name: 'PerGB2018' }
     retentionInDays: 30
   }
 }
@@ -263,7 +260,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
 
 resource workslipSqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
   name: toLower(workslipSqlServerName)
-  location: location
+  location: workslipSqlLocation
   tags: tags
   properties: {
     administratorLogin: workslipSqlAdminLogin
@@ -276,7 +273,7 @@ resource workslipSqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
 resource workslipSqlDatabase 'Microsoft.Sql/servers/databases@2024-05-01-preview' = {
   parent: workslipSqlServer
   name: workslipSqlDatabaseName
-  location: location
+  location: workslipSqlLocation
   tags: tags
   sku: {
     name: workslipSqlSkuName

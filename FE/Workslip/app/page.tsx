@@ -6,8 +6,10 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
-  FileSignature,
-  PenLine,
+  LockKeyhole,
+  ShieldCheck,
+  Smartphone,
+  UserCheck,
   Wrench
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -42,7 +44,7 @@ const nextLabels: Record<StepId, string> = {
   report: "Kategorier",
   categories: "Kontrol",
   controls: "Afslutning",
-  closure: "Underskrift",
+  closure: "Attestering",
   signature: "Send",
   done: "Færdig"
 };
@@ -80,6 +82,13 @@ export default function Home() {
   const [reportNumber, setReportNumber] = useState("4V05-001");
   const [customerNotes, setCustomerNotes] = useState("");
   const [expandedSummaryStages, setExpandedSummaryStages] = useState<string[]>([]);
+  const signedInUser = {
+    name: "Niels Petersen",
+    role: "Montør",
+    organization: "Aarhus VVS ApS",
+    identityProvider: "MitID Erhverv",
+    assurance: "Godkendt med Face ID på denne telefon"
+  };
 
   const currentIndex = stepOrder.indexOf(currentStep);
   const stepCount = stepOrder.length - 1;
@@ -224,7 +233,7 @@ export default function Home() {
   );
 
   const primaryLabel =
-    currentStep === "signature" ? "Send til kontoret" : currentStep === "done" ? "Ny rapport" : "Fortsæt";
+    currentStep === "signature" ? "Attestér og send" : currentStep === "done" ? "Ny rapport" : "Fortsæt";
 
   return (
     <main className="app-shell">
@@ -439,9 +448,20 @@ export default function Home() {
 
           {currentStep === "signature" && (
             <StepFrame
-              title="Godkend og signér"
-              lead="Gennemgå rapporten og underskriv før indsendelse til kontoret."
+              title="Digital attestering"
+              lead="Gennemgå rapporten og bekræft med den bruger, der er logget ind. Attesteringen gemmes med navn, rolle, tidspunkt og rapportens kontrolpunkter."
             >
+              <div className="identity-card">
+                <div className="identity-icon">
+                  <ShieldCheck size={22} strokeWidth={2.7} />
+                </div>
+                <div className="identity-main">
+                  <span>Logget ind med {signedInUser.identityProvider}</span>
+                  <strong>{signedInUser.name}</strong>
+                  <small>{signedInUser.role} · {signedInUser.organization}</small>
+                </div>
+              </div>
+
               <div className="summary-box sm">
                 <SummaryRow label="Kunde" value={customerName} />
                 <SummaryRow label="Adresse" value={address} />
@@ -520,17 +540,39 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="signature-area">
-                <Field label="Dato">
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                </Field>
-                <Field label="Montør">
-                  <input defaultValue="Niels Petersen" autoComplete="name" />
-                </Field>
-                <button className="signature-pad" type="button">
-                  <PenLine size={24} />
-                  Underskrift
-                </button>
+              <div className="attestation-panel">
+                <div className="attestation-header">
+                  <UserCheck size={20} strokeWidth={2.7} />
+                  <div>
+                    <strong>Montørens bekræftelse</strong>
+                    <span>Gemmes som digital attestering i audit trail.</span>
+                  </div>
+                </div>
+                <p>
+                  Jeg bekræfter, at arbejdet er udført, og at de markerede kontrolpunkter er kontrolleret efter virksomhedens KLS.
+                </p>
+                <div className="attestation-facts">
+                  <div>
+                    <span>Bruger</span>
+                    <strong>{signedInUser.name}</strong>
+                  </div>
+                  <div>
+                    <span>Rolle</span>
+                    <strong>{signedInUser.role}</strong>
+                  </div>
+                  <div>
+                    <span>Dato</span>
+                    <strong>{date}</strong>
+                  </div>
+                  <div>
+                    <span>Metode</span>
+                    <strong>MitID</strong>
+                  </div>
+                </div>
+                <div className="device-proof">
+                  <Smartphone size={17} strokeWidth={2.5} />
+                  <span>{signedInUser.assurance}</span>
+                </div>
               </div>
 
             </StepFrame>
@@ -539,7 +581,7 @@ export default function Home() {
           {currentStep === "done" && (
             <StepFrame
               title="Rapport sendt"
-              lead="4V05 arbejdsrapporten er udfyldt, underskrevet af montør og klar til kontorets gennemgang."
+              lead="4V05 arbejdsrapporten er udfyldt, digitalt attesteret af montør og klar til kontorets gennemgang."
             >
               <div className="done-panel">
                 <div className="done-mark">
@@ -624,7 +666,7 @@ export default function Home() {
                     label="Afslutning"
                     value={closure.map((flag) => closureFlags.find((item) => item.id === flag)?.label).join(", ")}
                   />
-                  <SummaryRow label="Signering" value="Niels Petersen, montør" />
+                  <SummaryRow label="Attestering" value={`${signedInUser.name}, ${signedInUser.role} via ${signedInUser.identityProvider}`} />
                 </div>
               )}
             </StepFrame>
@@ -643,7 +685,7 @@ export default function Home() {
           {currentStep === "closure" && closureError && <p className="bottom-error">{closureError}</p>}
           {currentStep === "signature" && showInlineConfirm ? (
             <div className="inline-confirm">
-              <span>Er du færdig?</span>
+              <span>Bekræft med digital attestering?</span>
               <div className="inline-confirm-actions">
                 <button className="inline-confirm-btn secondary" onClick={() => setShowInlineConfirm(false)}>
                   Annuller
@@ -655,7 +697,7 @@ export default function Home() {
                     setCurrentStep("done");
                   }}
                 >
-                  Ja, send
+                  Bekræft og send
                 </button>
               </div>
             </div>
@@ -686,9 +728,9 @@ export default function Home() {
           <p>Valgt anlægstype styrer hvilke kontrolpunkter montøren ser.</p>
         </div>
         <div className="context-card">
-          <FileSignature size={24} />
-          <h2>Montørunderskrift</h2>
-          <p>Rapporten afsluttes med montørens underskrift, som i kundens PDF.</p>
+          <LockKeyhole size={24} />
+          <h2>Digital attestering</h2>
+          <p>Montøren bekræfter rapporten med login, rolle, tidspunkt og audit trail i stedet for tegnet signatur.</p>
         </div>
       </aside>
     </main>

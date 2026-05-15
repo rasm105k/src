@@ -1,0 +1,605 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.43.8.12551",
+      "templateHash": "10045688602729638030"
+    }
+  },
+  "parameters": {
+    "companyName": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev"
+    },
+    "notificationEmail": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "[format('func-{0}-{1}', parameters('companyName'), toLower(parameters('environment')))]"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "[take(format('st{0}{1}', parameters('companyName'), toLower(parameters('environment'))), 24)]"
+    },
+    "logicAppName": {
+      "type": "string",
+      "defaultValue": "[format('la-{0}-{1}', parameters('companyName'), toLower(parameters('environment')))]"
+    },
+    "appInsightsName": {
+      "type": "string",
+      "defaultValue": "[format('ai-{0}-{1}', parameters('companyName'), toLower(parameters('environment')))]"
+    },
+    "logAnalyticsName": {
+      "type": "string",
+      "defaultValue": "[format('law-{0}-{1}', parameters('companyName'), toLower(parameters('environment')))]"
+    },
+    "identityName": {
+      "type": "string",
+      "defaultValue": "[format('id-{0}-{1}', parameters('companyName'), toLower(parameters('environment')))]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "defaultValue": "[take(format('kv-{0}-{1}', parameters('companyName'), toLower(parameters('environment'))), 24)]"
+    },
+    "documentIntelligenceName": {
+      "type": "string",
+      "defaultValue": "[format('di-{0}-{1}', parameters('companyName'), toLower(parameters('environment')))]"
+    },
+    "workslipApiName": {
+      "type": "string",
+      "defaultValue": "[format('app-workslip-{0}-{1}', parameters('companyName'), toLower(parameters('environment')))]"
+    },
+    "workslipApiPlanName": {
+      "type": "string",
+      "defaultValue": "[format('asp-workslip-{0}-{1}', parameters('companyName'), toLower(parameters('environment')))]"
+    },
+    "workslipSqlServerName": {
+      "type": "string",
+      "defaultValue": "[take(format('sql-workslip-{0}-{1}', parameters('companyName'), toLower(parameters('environment'))), 63)]"
+    },
+    "workslipSqlDatabaseName": {
+      "type": "string",
+      "defaultValue": "workslip"
+    },
+    "workslipSqlAdminLogin": {
+      "type": "string",
+      "defaultValue": "workslipadmin"
+    },
+    "workslipSqlAdminPassword": {
+      "type": "securestring",
+      "defaultValue": ""
+    },
+    "workslipApiSkuName": {
+      "type": "string",
+      "defaultValue": "B1"
+    },
+    "workslipSqlSkuName": {
+      "type": "string",
+      "defaultValue": "Basic"
+    },
+    "workslipSqlAllowedIpRanges": {
+      "type": "array",
+      "defaultValue": []
+    },
+    "workslipSqlLocation": {
+      "type": "string",
+      "defaultValue": "[parameters('location')]"
+    }
+  },
+  "variables": {
+    "roles": {
+      "keyVaultSecretsUser": "4633458b-436e-492d-b285-4f6b7b5e48d1",
+      "cognitiveServicesUser": "a97b65f3-24c7-4388-baec-2e87135dc908",
+      "storageBlobContributor": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
+      "storageQueueContributor": "974c5e8b-45b9-4653-ba55-5f855dd0fb88",
+      "storageTableContributor": "0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3"
+    },
+    "tags": {
+      "environment": "[parameters('environment')]",
+      "project": "[parameters('companyName')]"
+    },
+    "workflowTemplate": "{\n  \"$schema\": \"https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#\",\n  \"contentVersion\": \"1.0.0.0\",\n  \"parameters\": {\n    \"$connections\": {\n      \"defaultValue\": {},\n      \"type\": \"Object\"\n    }\n  },\n  \"triggers\": {\n    \"When_a_blob_is_created_in_uploads\": {\n      \"type\": \"ApiConnection\",\n      \"inputs\": {\n        \"host\": {\n          \"connection\": {\n            \"name\": \"@parameters('$connections')['azureeventgrid']['connectionId']\"\n          }\n        },\n        \"method\": \"post\",\n        \"path\": \"/subscriptions/@encodeURIComponent('__SUB_ID__')/providers/@encodeURIComponent('Microsoft.Storage.StorageAccounts')/resource/@encodeURIComponent('__STORAGE_NAME__')/events/@encodeURIComponent('Microsoft.Storage.BlobCreated')\"\n      },\n      \"recurrence\": {\n        \"frequency\": \"Minute\",\n        \"interval\": 3\n      }\n    }\n  },\n  \"actions\": {\n    \"Get_file_from_uploads\": {\n      \"type\": \"ApiConnection\",\n      \"inputs\": {\n        \"host\": {\n          \"connection\": {\n            \"name\": \"@parameters('$connections')['azureblob']['connectionId']\"\n          }\n        },\n        \"method\": \"get\",\n        \"path\": \"/datasets/default/GetFileByPath\",\n        \"queries\": {\n          \"path\": \"@{triggerOutputs()?['body']['subject']}\"\n        }\n      },\n      \"runAfter\": {}\n    },\n    \"Analyze_with_Document_Intelligence\": {\n      \"type\": \"ApiConnection\",\n      \"inputs\": {\n        \"host\": {\n          \"connection\": {\n            \"name\": \"@parameters('$connections')['formrecognizer']['connectionId']\"\n          }\n        },\n        \"method\": \"post\",\n        \"body\": \"@body('Get_file_from_uploads')\",\n        \"path\": \"/connectorinternaldocumentintelligence/documentModels/@{encodeURIComponent('prebuilt-layout')}:analyze\",\n        \"queries\": {\n          \"api-version\": \"2024-11-30\"\n        }\n      },\n      \"runAfter\": {\n        \"Get_file_from_uploads\": [\"Succeeded\"]\n      }\n    },\n    \"Store_raw_analysis\": {\n      \"type\": \"ApiConnection\",\n      \"inputs\": {\n        \"host\": {\n          \"connection\": {\n            \"name\": \"@parameters('$connections')['azureblob']['connectionId']\"\n          }\n        },\n        \"method\": \"put\",\n        \"body\": \"@body('Analyze_with_Document_Intelligence')\",\n        \"path\": \"/datasets/default/UpdateFile\",\n        \"queries\": {\n          \"path\": \"/documents/@{outputs('Extract_file_name')}/analysis.json\"\n        }\n      },\n      \"runAfter\": {\n        \"Extract_file_name\": [\"Succeded\"],\n        \"Analyze_with_Document_Intelligence\": [\"Succeeded\"]\n      }\n    },\n    \"Extract_file_name\": {\n      \"type\": \"Compose\",\n      \"inputs\": \"@first(split(last(split(triggerOutputs()?['body']['subject'], '/')), '.'))\",\n      \"runAfter\": {\n        \"Analyze_with_Document_Intelligence\": [\"Succeeded\"]\n      }\n    },\n    \"Create_HTML_report\": {\n      \"type\": \"Compose\",\n      \"inputs\": \"<!DOCTYPE html><html lang=\\\"da\\\"><head><meta charset=\\\"utf-8\\\"><title>Workslip rapport - @{outputs('Extract_file_name')}</title><style>body{font-family:system-ui,-apple-system,sans-serif;max-width:960px;margin:40px auto;padding:0 20px;color:#1a1a1a;line-height:1.6}h1{color:#1a3a5c;border-bottom:3px solid #2563eb;padding-bottom:10px}.meta{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:20px 0}.meta dt{font-weight:600;color:#475569;font-size:.85rem;text-transform:uppercase;letter-spacing:.5px}.meta dd{margin:0 0 10px 0}.meta dd:last-child{margin-bottom:0}h2{color:#1e3a5f;margin-top:32px;margin-bottom:8px}.content-box{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:20px;white-space:pre-wrap;word-wrap:break-word;font-family:Georgia,serif;font-size:1rem;line-height:1.7;max-height:800px;overflow-y:auto}.table-list{list-style:none;padding:0;display:grid;gap:24px}.table-card{border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}.table-card h3{background:#f1f5f9;margin:0;padding:10px 16px;font-size:.95rem;color:#334155}.table-card table{border-collapse:collapse;width:100%}.table-card th,.table-card td{border:1px solid #e2e8f0;padding:8px 12px;text-align:left;font-size:.875rem}.table-card th{background:#f8fafc;font-weight:600;color:#475569}.footer{margin-top:48px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:.8rem;color:#94a3b8;text-align:center}</style></head><body><h1>Workslip rapport</h1><dl class=\\\"meta\\\"><dt>Filnavn</dt><dd>@{outputs('Extract_file_name')}</dd><dt>Behandlet</dt><dd>@{utcNow('ddd MMM dd yyyy HH:mm:ss')}</dd><dt>Sider</dt><dd>@{length(body('Analyze_with_Document_Intelligence')?['analyzeResult']?['pages'])}</dd><dt>Tabeller fundet</dt><dd>@{length(body('Analyze_with_Document_Intelligence')?['analyzeResult']?['tables'])}</dd></dl><h2>UdtrÃ¦kket indhold</h2><div class=\\\"content-box\\\">@{body('Analyze_with_Document_Intelligence')?['analyzeResult']?['content']}</div></body></html>\",\n      \"runAfter\": {\n        \"Extract_file_name\": [\"Succeeded\"]\n      }\n    },\n    \"Store_HTML_report\": {\n      \"type\": \"ApiConnection\",\n      \"inputs\": {\n        \"host\": {\n          \"connection\": {\n            \"name\": \"@parameters('$connections')['azureblob']['connectionId']\"\n          }\n        },\n        \"method\": \"put\",\n        \"body\": \"@{outputs('Create_HTML_report')}\",\n        \"path\": \"/datasets/default/UpdateFile\",\n        \"queries\": {\n          \"path\": \"/documents/@{outputs('Extract_file_name')}/report.html\"\n        }\n      },\n      \"runAfter\": {\n        \"Create_HTML_report\": [\"Succeeded\"]\n      }\n    },\n    \"Send_notification_email\": {\n      \"type\": \"ApiConnection\",\n      \"inputs\": {\n        \"host\": {\n          \"connection\": {\n            \"name\": \"@parameters('$connections')['outlook']['connectionId']\"\n          }\n        },\n        \"method\": \"post\",\n        \"body\": {\n          \"To\": \"__NOTIFICATION_EMAIL__\",\n          \"Subject\": \"Ny workslip behandlet\",\n          \"Body\": \"<p>En ny workslip er blevet behandlet.</p><p><b>Fil:</b> @{outputs('Extract_file_name')}</p><p><b>Tid:</b> @{utcNow()}</p>\",\n          \"Importance\": \"Normal\"\n        },\n        \"path\": \"/v2/Mail\"\n      },\n      \"runAfter\": {\n        \"Store_HTML_report\": [\"Succeeded\"]\n      }\n    }\n  },\n  \"outputs\": {}\n}\n",
+    "workflowDefinition": "[json(replace(replace(replace(replace(variables('workflowTemplate'), '__SUB_ID__', subscription().subscriptionId), '__STORAGE_NAME__', parameters('storageAccountName')), '__NOTIFICATION_EMAIL__', parameters('notificationEmail')), '__ACS_SENDER__', ''))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[parameters('identityName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2022-10-01",
+      "name": "[parameters('logAnalyticsName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]",
+      "sku": {
+        "name": "PerGB2018"
+      },
+      "properties": {
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[parameters('appInsightsName')]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "tags": "[variables('tags')]",
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsName'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-02-01",
+      "name": "[parameters('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]",
+      "properties": {
+        "sku": {
+          "name": "standard",
+          "family": "A"
+        },
+        "tenantId": "[subscription().tenantId]",
+        "enableRbacAuthorization": true,
+        "enableSoftDelete": true,
+        "softDeleteRetentionInDays": 7,
+        "enablePurgeProtection": true
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+      "name": "[guid(format('{0}{1}{2}', resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), variables('roles').keyVaultSecretsUser))]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roles').keyVaultSecretsUser)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[parameters('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "tags": "[variables('tags')]",
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true,
+        "allowBlobPublicAccess": false
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/{1}', parameters('storageAccountName'), 'default')]",
+      "properties": {
+        "deleteRetentionPolicy": {
+          "enabled": true,
+          "days": 7
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/{1}/{2}', parameters('storageAccountName'), 'default', 'uploads')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/{1}/{2}', parameters('storageAccountName'), 'default', 'documents')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+      "name": "[guid(format('{0}{1}{2}', resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), variables('roles').storageBlobContributor))]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roles').storageBlobContributor)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+      "name": "[guid(format('{0}{1}{2}', resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), variables('roles').storageQueueContributor))]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roles').storageQueueContributor)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+      "name": "[guid(format('{0}{1}{2}', resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), variables('roles').storageTableContributor))]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roles').storageTableContributor)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.CognitiveServices/accounts",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('documentIntelligenceName')]",
+      "location": "[parameters('location')]",
+      "kind": "FormRecognizer",
+      "sku": {
+        "name": "S0"
+      },
+      "tags": "[variables('tags')]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')))]": {}
+        }
+      },
+      "properties": {
+        "restore": false,
+        "customSubDomainName": "[parameters('documentIntelligenceName')]",
+        "publicNetworkAccess": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.CognitiveServices/accounts', parameters('documentIntelligenceName'))]",
+      "name": "[guid(format('{0}{1}{2}', resourceId('Microsoft.CognitiveServices/accounts', parameters('documentIntelligenceName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), variables('roles').cognitiveServicesUser))]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roles').cognitiveServicesUser)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.CognitiveServices/accounts', parameters('documentIntelligenceName'))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-01-01",
+      "name": "[format('asp-{0}-{1}', parameters('companyName'), toLower(parameters('environment')))]",
+      "location": "[parameters('location')]",
+      "kind": "linux",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic"
+      },
+      "tags": "[variables('tags')]",
+      "properties": {
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-01-01",
+      "name": "[parameters('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp,linux",
+      "tags": "[variables('tags')]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')))]": {}
+        }
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('asp-{0}-{1}', parameters('companyName'), toLower(parameters('environment'))))]",
+        "httpsOnly": true,
+        "siteConfig": {
+          "linuxFxVersion": "DOTNET-ISOLATED|8.0",
+          "alwaysOn": false,
+          "minTlsVersion": "1.2",
+          "ftpsState": "Disabled",
+          "appSettings": [
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "dotnet-isolated"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "AzureWebJobsStorage__accountName",
+              "value": "[parameters('storageAccountName')]"
+            },
+            {
+              "name": "AzureWebJobsStorage__credential",
+              "value": "managedidentity"
+            },
+            {
+              "name": "AzureWebJobsStorage__clientId",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').clientId]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', parameters('appInsightsName')), '2020-02-02').ConnectionString]"
+            },
+            {
+              "name": "AZURE_CLIENT_ID",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').clientId]"
+            },
+            {
+              "name": "UPLOAD_CONTAINER",
+              "value": "uploads"
+            },
+            {
+              "name": "STORAGE_ACCOUNT_NAME",
+              "value": "[parameters('storageAccountName')]"
+            },
+            {
+              "name": "KEY_VAULT_URL",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), '2023-02-01').vaultUri]"
+            },
+            {
+              "name": "DOCUMENT_INTELLIGENCE_ENDPOINT",
+              "value": "[reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('documentIntelligenceName')), '2023-05-01').endpoint]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/components', parameters('appInsightsName'))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts', parameters('documentIntelligenceName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', format('asp-{0}-{1}', parameters('companyName'), toLower(parameters('environment'))))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Sql/servers",
+      "apiVersion": "2024-05-01-preview",
+      "name": "[toLower(parameters('workslipSqlServerName'))]",
+      "location": "[parameters('workslipSqlLocation')]",
+      "tags": "[variables('tags')]",
+      "properties": {
+        "administratorLogin": "[parameters('workslipSqlAdminLogin')]",
+        "administratorLoginPassword": "[parameters('workslipSqlAdminPassword')]",
+        "minimalTlsVersion": "1.2",
+        "publicNetworkAccess": "Enabled"
+      }
+    },
+    {
+      "type": "Microsoft.Sql/servers/databases",
+      "apiVersion": "2024-05-01-preview",
+      "name": "[format('{0}/{1}', toLower(parameters('workslipSqlServerName')), parameters('workslipSqlDatabaseName'))]",
+      "location": "[parameters('workslipSqlLocation')]",
+      "tags": "[variables('tags')]",
+      "sku": {
+        "name": "[parameters('workslipSqlSkuName')]"
+      },
+      "properties": {
+        "collation": "SQL_Latin1_General_CP1_CI_AS",
+        "maxSizeBytes": 2147483648
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', toLower(parameters('workslipSqlServerName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Sql/servers/firewallRules",
+      "apiVersion": "2024-05-01-preview",
+      "name": "[format('{0}/{1}', toLower(parameters('workslipSqlServerName')), 'AllowAzureServices')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "0.0.0.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', toLower(parameters('workslipSqlServerName')))]"
+      ]
+    },
+    {
+      "copy": {
+        "name": "workslipSqlFirewallRules",
+        "count": "[length(parameters('workslipSqlAllowedIpRanges'))]"
+      },
+      "type": "Microsoft.Sql/servers/firewallRules",
+      "apiVersion": "2024-05-01-preview",
+      "name": "[format('{0}/{1}', toLower(parameters('workslipSqlServerName')), parameters('workslipSqlAllowedIpRanges')[copyIndex()].name)]",
+      "properties": {
+        "startIpAddress": "[parameters('workslipSqlAllowedIpRanges')[copyIndex()].startIpAddress]",
+        "endIpAddress": "[parameters('workslipSqlAllowedIpRanges')[copyIndex()].endIpAddress]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', toLower(parameters('workslipSqlServerName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2024-04-01",
+      "name": "[parameters('workslipApiPlanName')]",
+      "location": "[parameters('location')]",
+      "kind": "linux",
+      "sku": {
+        "name": "[parameters('workslipApiSkuName')]"
+      },
+      "tags": "[variables('tags')]",
+      "properties": {
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2024-04-01",
+      "name": "[parameters('workslipApiName')]",
+      "location": "[parameters('location')]",
+      "kind": "app,linux",
+      "tags": "[variables('tags')]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')))]": {}
+        }
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('workslipApiPlanName'))]",
+        "httpsOnly": true,
+        "siteConfig": {
+          "linuxFxVersion": "DOTNETCORE|10.0",
+          "ftpsState": "Disabled",
+          "minTlsVersion": "1.2",
+          "alwaysOn": true,
+          "appSettings": [
+            {
+              "name": "ASPNETCORE_ENVIRONMENT",
+              "value": "[if(equals(parameters('environment'), 'prod'), 'Production', 'Development')]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', parameters('appInsightsName')), '2020-02-02').ConnectionString]"
+            },
+            {
+              "name": "AZURE_CLIENT_ID",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').clientId]"
+            },
+            {
+              "name": "ConnectionStrings__WorkslipDb",
+              "value": "[format('Server=tcp:{0},1433;Initial Catalog={1};Persist Security Info=False;User ID={2};Password={3};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;', reference(resourceId('Microsoft.Sql/servers', toLower(parameters('workslipSqlServerName'))), '2024-05-01-preview').fullyQualifiedDomainName, parameters('workslipSqlDatabaseName'), parameters('workslipSqlAdminLogin'), parameters('workslipSqlAdminPassword'))]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/components', parameters('appInsightsName'))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', parameters('workslipApiPlanName'))]",
+        "[resourceId('Microsoft.Sql/servers/databases', toLower(parameters('workslipSqlServerName')), parameters('workslipSqlDatabaseName'))]",
+        "[resourceId('Microsoft.Sql/servers', toLower(parameters('workslipSqlServerName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')))]": {}
+        }
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": "[variables('workflowDefinition')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "STORAGE_ACCOUNT_NAME": {
+      "type": "string",
+      "value": "[parameters('storageAccountName')]"
+    },
+    "FUNCTION_APP_NAME": {
+      "type": "string",
+      "value": "[parameters('functionAppName')]"
+    },
+    "LOGIC_APP_NAME": {
+      "type": "string",
+      "value": "[parameters('logicAppName')]"
+    },
+    "MANAGED_IDENTITY_CLIENT_ID": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').clientId]"
+    },
+    "MANAGED_IDENTITY_PRINCIPAL_ID": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').principalId]"
+    },
+    "APP_INSIGHTS_CONNECTION_STRING": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/components', parameters('appInsightsName')), '2020-02-02').ConnectionString]"
+    },
+    "KEY_VAULT_URI": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), '2023-02-01').vaultUri]"
+    },
+    "DOCUMENT_INTELLIGENCE_ENDPOINT": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('documentIntelligenceName')), '2023-05-01').endpoint]"
+    },
+    "DOCUMENT_INTELLIGENCE_NAME": {
+      "type": "string",
+      "value": "[parameters('documentIntelligenceName')]"
+    },
+    "WORKSLIP_API_NAME": {
+      "type": "string",
+      "value": "[parameters('workslipApiName')]"
+    },
+    "WORKSLIP_API_URL": {
+      "type": "string",
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', parameters('workslipApiName')), '2024-04-01').defaultHostName)]"
+    },
+    "WORKSLIP_SQL_SERVER_FQDN": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Sql/servers', toLower(parameters('workslipSqlServerName'))), '2024-05-01-preview').fullyQualifiedDomainName]"
+    },
+    "WORKSLIP_SQL_DATABASE_NAME": {
+      "type": "string",
+      "value": "[parameters('workslipSqlDatabaseName')]"
+    }
+  }
+}

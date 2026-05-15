@@ -796,18 +796,149 @@ select:focus {
   background: #f8fbff;
 }
 
-.signature-pad {
-  width: 100%;
-  min-height: 136px;
-  border: 1px dashed var(--line-strong);
-  border-radius: 20px;
-  background: #fff;
-  color: var(--text);
+.identity-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #bfe8cf;
+  border-radius: 18px;
+  background: var(--green-soft);
+  padding: 13px;
+}
+
+.identity-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--green);
+  color: #fff;
   display: grid;
   place-items: center;
-  gap: 8px;
-  padding: 18px;
+  flex: 0 0 auto;
+}
+
+.identity-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.identity-main span {
+  color: #37654b;
+  font-size: 12px;
+  line-height: 1.2;
   font-weight: 850;
+}
+
+.identity-main strong {
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.identity-main small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  font-weight: 750;
+}
+
+.attestation-panel {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: #fff;
+  padding: 14px;
+  display: grid;
+  gap: 13px;
+}
+
+.attestation-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.attestation-header svg {
+  color: var(--blue);
+  flex: 0 0 auto;
+}
+
+.attestation-header div {
+  display: grid;
+  gap: 2px;
+}
+
+.attestation-header strong {
+  font-size: 15px;
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.attestation-header span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 750;
+}
+
+.attestation-panel p {
+  border: 1px solid #d8e7ff;
+  border-radius: 16px;
+  background: #f8fbff;
+  color: #102a56;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 800;
+  padding: 12px;
+}
+
+.attestation-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.attestation-facts div {
+  border: 1px solid #edf1f6;
+  border-radius: 14px;
+  background: var(--surface-soft);
+  padding: 9px 10px;
+  min-width: 0;
+}
+
+.attestation-facts span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.15;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.attestation-facts strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.device-proof {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--green);
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 850;
+}
+
+.device-proof svg {
+  flex: 0 0 auto;
 }
 
 .done-panel {
@@ -1103,12 +1234,6 @@ p.bottom-error {
   .desktop-context {
     display: none;
   }
-
-.signature-area {
-  margin-top: 16px;
-  display: grid;
-  gap: 12px;
-}
 
 .bottom-bar {
     left: 12px;
