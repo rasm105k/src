@@ -169,7 +169,7 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
     httpsOnly: true
     siteConfig: {
       linuxFxVersion: 'DOTNET-ISOLATED|10.0'
-      alwaysOn: true
+      alwaysOn: false
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
       appSettings: [

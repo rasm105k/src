@@ -1,16 +1,44 @@
 export type WorkslipStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
+export type InstallationType = 'gas' | 'vand' | 'aflob' | 'varme'
+
+export type WorkKind = 'nyInstallation' | 'aendring' | 'reparation' | 'serviceAndet'
+
+export type ClosureFlag =
+  | 'ikkeFaerdig'
+  | 'faerdig'
+  | 'tegninger'
+  | 'faerdigmelding'
+  | 'driftVedligehold'
+  | 'klarTilFaktura'
+
+export interface ControlStageEntry {
+  stageId: string
+  stageTitle: string
+  checkedItemIds: string[]
+  totalItems: number
+}
+
 export interface Workslip {
   id: string
+  reportNumber: string
   customerName: string
-  customerEmail: string
-  customerPhone: string
-  projectName: string
+  address: string
+  contactPerson: string
+  phone: string
+  date: string
   description: string
+  customerInfo: string
+  installationTypes: InstallationType[]
+  workKind: WorkKind
+  customWorkKind: string
+  controlStages: ControlStageEntry[]
+  remarks: string
+  closureFlags: ClosureFlag[]
+  technicianName: string
+  signatureDate: string
   status: WorkslipStatus
-  fileName: string
-  fileSize: number
   submittedAt: string
   processedAt: string | null
-  metadata: Record<string, string>
+  fileSize: number
 }

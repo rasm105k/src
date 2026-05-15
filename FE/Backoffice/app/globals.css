@@ -1,1 +1,22 @@
 @import "tailwindcss";
+
+.input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  background: white;
+  color: #1f2937;
+}
+
+.input:focus {
+  border-color: #9ca3af;
+  box-shadow: 0 0 0 2px #f3f4f6;
+}
+
+textarea.input {
+  resize: vertical;
+}
