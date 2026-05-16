@@ -4,6 +4,18 @@ export type InstallationType = 'gas' | 'vand' | 'aflob' | 'varme'
 
 export type WorkKind = 'nyInstallation' | 'aendring' | 'reparation' | 'serviceAndet'
 
+export type ReviewStatus =
+  | 'uploaded'
+  | 'processing'
+  | 'needsReview'
+  | 'readyForApproval'
+  | 'approved'
+  | 'rejected'
+
+export type ExtractedFieldStatus = 'confirmed' | 'needsReview' | 'missing' | 'conflict' | 'corrected'
+
+export type ReviewIssueSeverity = 'low' | 'medium' | 'high'
+
 export type ClosureFlag =
   | 'ikkeFaerdig'
   | 'faerdig'
@@ -22,6 +34,43 @@ export interface ControlStageEntry {
   stageTitle: string
   checkedItems: CheckedItem[]
   totalItems: number
+}
+
+export interface ExtractedField {
+  id: string
+  label: string
+  value: string
+  confidence: number
+  status: ExtractedFieldStatus
+  reason?: string
+}
+
+export interface ReviewIssue {
+  id: string
+  severity: ReviewIssueSeverity
+  message: string
+}
+
+export interface ReviewEvent {
+  id: string
+  at: string
+  actor: string
+  action: string
+  message: string
+}
+
+export interface ScanReview {
+  status: ReviewStatus
+  score: number
+  originalFileName: string
+  uploadedAt: string
+  processedAt: string | null
+  approvedAt: string | null
+  missingCount: number
+  uncertainCount: number
+  fields: ExtractedField[]
+  issues: ReviewIssue[]
+  events: ReviewEvent[]
 }
 
 export interface Workslip {
@@ -46,4 +95,5 @@ export interface Workslip {
   submittedAt: string
   processedAt: string | null
   fileSize: number
+  scanReview?: ScanReview
 }

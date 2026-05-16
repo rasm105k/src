@@ -1,4 +1,15 @@
-import { Workslip, WorkslipStatus, InstallationType, WorkKind, ClosureFlag, ControlStageEntry, CheckedItem } from './types'
+import {
+  Workslip,
+  WorkslipStatus,
+  InstallationType,
+  WorkKind,
+  ClosureFlag,
+  ControlStageEntry,
+  CheckedItem,
+  ScanReview,
+  ExtractedField,
+  ReviewStatus,
+} from './types'
 
 const customers = [
   { name: 'Aarhus Ejendomme ApS', address: 'Trøjborgvej 12, 8200 Aarhus N', contact: 'Mette Jensen', phone: '26 75 09 81' },
@@ -44,6 +55,8 @@ const remarksList = [
 ]
 
 const technicians = ['Rasmus Bak', 'Thomas Mikkelsen', 'Kim Andersen', 'Rasmus Bæk', 'Morten Hjort', 'Lasse Jensen']
+
+const reviewStatuses: ReviewStatus[] = ['needsReview', 'readyForApproval', 'approved', 'rejected']
 
 export const installationTypeLabels: Record<InstallationType, string> = {
   gas: 'Gas',
@@ -242,6 +255,58 @@ function buildControlStages(installations: InstallationType[]): ControlStageEntr
     })
 }
 
+function buildReviewFields(workslip: Workslip, score: number): ExtractedField[] {
+  const fieldBase: ExtractedField[] = [
+    { id: 'customerName', label: 'Kunde', value: workslip.customerName, confidence: Math.min(99, score + 6), status: 'confirmed' },
+    { id: 'contactPerson', label: 'Kontaktperson', value: workslip.contactPerson, confidence: Math.min(97, score + 2), status: 'confirmed' },
+    { id: 'phone', label: 'Telefon', value: workslip.phone, confidence: Math.min(96, score + 1), status: 'confirmed' },
+    { id: 'address', label: 'Adresse', value: workslip.address, confidence: Math.min(98, score + 5), status: 'confirmed' },
+    { id: 'date', label: 'Dato', value: workslip.date, confidence: Math.max(65, score - 3), status: score > 78 ? 'confirmed' : 'needsReview', reason: score > 78 ? undefined : 'Datoen er delvist utydelig i scanningen.' },
+    { id: 'description', label: 'Opgavebeskrivelse', value: workslip.description, confidence: Math.max(58, score - 12), status: score > 84 ? 'confirmed' : 'needsReview', reason: score > 84 ? undefined : 'Håndskriften er læsbar, men bør kontrolleres.' },
+    { id: 'installationTypes', label: 'Anlægstype', value: workslip.installationTypes.map(t => installationTypeLabels[t]).join(', '), confidence: Math.max(68, score - 4), status: 'confirmed' },
+    { id: 'workKind', label: 'Arbejdstype', value: workslip.workKind === 'serviceAndet' ? workslip.customWorkKind : workKindLabels[workslip.workKind], confidence: Math.max(60, score - 8), status: score > 72 ? 'confirmed' : 'needsReview', reason: score > 72 ? undefined : 'Afkrydsningen er tæt på feltkanten.' },
+    { id: 'technicianName', label: 'Montør', value: workslip.technicianName, confidence: Math.max(52, score - 15), status: score > 80 ? 'confirmed' : 'needsReview', reason: score > 80 ? undefined : 'Navnet kan være fejllæst.' },
+    { id: 'signatureDate', label: 'Underskriftsdato', value: workslip.signatureDate, confidence: Math.max(55, score - 10), status: score > 70 ? 'confirmed' : 'missing', reason: score > 70 ? undefined : 'Underskriftsdato blev ikke sikkert aflæst.' },
+  ]
+
+  return fieldBase
+}
+
+function buildScanReview(workslip: Workslip, filename: string, status: ReviewStatus, uploadedAt: string): ScanReview {
+  const baseScore =
+    status === 'approved' ? Math.floor(Math.random() * 8) + 91 :
+    status === 'readyForApproval' ? Math.floor(Math.random() * 10) + 82 :
+    status === 'rejected' ? Math.floor(Math.random() * 12) + 45 :
+    Math.floor(Math.random() * 22) + 58
+  const fields = buildReviewFields(workslip, baseScore)
+  const missingCount = fields.filter(f => f.status === 'missing').length
+  const uncertainCount = fields.filter(f => f.status === 'needsReview' || f.status === 'conflict').length
+  const issues = [
+    ...(missingCount > 0 ? [{ id: 'missing-signature-date', severity: 'high' as const, message: 'Underskriftsdato mangler eller er ikke læst sikkert.' }] : []),
+    ...(uncertainCount > 0 ? [{ id: 'uncertain-handwriting', severity: 'medium' as const, message: `${uncertainCount} felter kræver manuel kontrol før godkendelse.` }] : []),
+    ...(workslip.controlStages.some(s => s.checkedItems.length < s.totalItems) ? [{ id: 'partial-control', severity: 'low' as const, message: 'Et eller flere kontrolafsnit er kun delvist udfyldt.' }] : []),
+  ]
+
+  return {
+    status,
+    score: baseScore,
+    originalFileName: filename,
+    uploadedAt,
+    processedAt: status === 'uploaded' || status === 'processing' ? null : new Date(new Date(uploadedAt).getTime() + 8 * 60000).toISOString(),
+    approvedAt: status === 'approved' ? new Date(new Date(uploadedAt).getTime() + 40 * 60000).toISOString() : null,
+    missingCount,
+    uncertainCount,
+    fields,
+    issues,
+    events: [
+      { id: 'uploaded', at: uploadedAt, actor: 'Kunde', action: 'Uploadet', message: `Scannet rapport modtaget: ${filename}` },
+      ...(status === 'uploaded' ? [] : [{ id: 'processed', at: new Date(new Date(uploadedAt).getTime() + 8 * 60000).toISOString(), actor: 'AI', action: 'OCR + LLM', message: 'Felter udtrukket og gennemgangsscore beregnet.' }]),
+      ...(status === 'approved' ? [{ id: 'approved', at: new Date(new Date(uploadedAt).getTime() + 40 * 60000).toISOString(), actor: 'Admin', action: 'Godkendt', message: 'Rapporten er manuelt kontrolleret og godkendt.' }] : []),
+      ...(status === 'rejected' ? [{ id: 'rejected', at: new Date(new Date(uploadedAt).getTime() + 35 * 60000).toISOString(), actor: 'Admin', action: 'Afvist', message: 'Rapporten kræver ny indsendelse fra virksomheden.' }] : []),
+    ],
+  }
+}
+
 let reportCounter = 0
 
 export function generateSingleWorkslip(filename: string): Workslip {
@@ -277,6 +342,18 @@ export function generateSingleWorkslip(filename: string): Workslip {
   }
 }
 
+export function generateScannedWorkslip(filename: string): Workslip {
+  const workslip = generateSingleWorkslip(filename)
+  const status = randomItem(['needsReview', 'readyForApproval'] as ReviewStatus[])
+
+  return {
+    ...workslip,
+    status: status === 'readyForApproval' ? 'processing' : 'pending',
+    submittedAt: new Date().toISOString(),
+    scanReview: buildScanReview(workslip, filename, status, new Date().toISOString()),
+  }
+}
+
 export function generateMockWorkslips(count: number): Workslip[] {
   return Array.from({ length: count }, () => {
     reportCounter++
@@ -290,7 +367,7 @@ export function generateMockWorkslips(count: number): Workslip[] {
       : null
     const technician = randomItem(technicians)
 
-    return {
+    const workslip: Workslip = {
       id: `WSL-${String(reportCounter).padStart(4, '0')}`,
       reportNumber: `4V05-${String(reportCounter).padStart(3, '0')}`,
       customerName: customer.name,
@@ -313,5 +390,21 @@ export function generateMockWorkslips(count: number): Workslip[] {
       processedAt: processed,
       fileSize: Math.floor(Math.random() * 5000000) + 100000,
     }
+
+    if (Math.random() < 0.42) {
+      const reviewStatus = status === 'completed'
+        ? 'approved'
+        : status === 'failed'
+          ? 'rejected'
+          : randomItem(reviewStatuses.filter(s => s !== 'approved' && s !== 'rejected'))
+      workslip.scanReview = buildScanReview(
+        workslip,
+        `${workslip.reportNumber}-scan.pdf`,
+        reviewStatus,
+        submitted
+      )
+    }
+
+    return workslip
   })
 }

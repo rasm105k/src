@@ -1,7 +1,6 @@
 param companyName string = ''
 param location string = resourceGroup().location
 param environment string = 'dev'
-param notificationEmail string = ''
 param functionAppName string          = 'func-${companyName}-${toLower(environment)}'
 param storageAccountName string       = take('st${companyName}${toLower(environment)}', 24)
 param logicAppName string             = 'la-${companyName}-${toLower(environment)}'
@@ -9,6 +8,8 @@ param appInsightsName string          = 'ai-${companyName}-${toLower(environment
 param identityName string             = 'id-${companyName}-${toLower(environment)}'
 param keyVaultName string             = take('kv-${companyName}-${toLower(environment)}', 24)
 param documentIntelligenceName string = 'di-${companyName}-${toLower(environment)}'
+param sqlServerName string = take('sql-${companyName}-${toLower(environment)}', 63)
+param sqlDatabaseName string = 'workslip'
 // ── Role definition IDs ───────────────────────────────────────────────────────
 // Centralised here so they're easy to audit and update.
 var roles = {
@@ -155,14 +156,14 @@ resource documentIntelligence 'Microsoft.CognitiveServices/accounts@2023-05-01' 
   name: documentIntelligenceName
   location: location
   kind: 'FormRecognizer'
-  sku: { name: 'S0' }
+  sku: { name: 'F0' }
   tags: tags
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: { '${identity.id}': {} }
   }
   properties: {
-    restore: true
+    restore: false
     customSubDomainName: documentIntelligenceName
     publicNetworkAccess: 'Enabled'
   }
@@ -175,6 +176,54 @@ resource diRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     principalId: identity.properties.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roles.cognitiveServicesUser)
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Azure SQL Database
+// ──────────────────────────────────────────────────────────────────────────────
+
+var sqlAdminPassword = uniqueString(resourceGroup().id, environment, 'sql-admin')
+var sqlConnectionString = 'Server=tcp:${toLower(sqlServerName)}.database.windows.net,1433;Database=${sqlDatabaseName};User ID=workslipadmin;Password=${sqlAdminPassword};TrustServerCertificate=False;Encrypt=True;'
+
+resource sqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
+  name: toLower(sqlServerName)
+  location: location
+  tags: tags
+  properties: {
+    administratorLogin: 'workslipadmin'
+    administratorLoginPassword: sqlAdminPassword
+    minimalTlsVersion: '1.2'
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource sqlDatabase 'Microsoft.Sql/servers/databases@2024-05-01-preview' = {
+  parent: sqlServer
+  name: sqlDatabaseName
+  location: location
+  tags: tags
+  sku: { name: 'Basic' }
+  properties: {
+    collation: 'SQL_Latin1_General_CP1_CI_AS'
+    maxSizeBytes: 2147483648
+  }
+}
+
+resource sqlFirewallAzure 'Microsoft.Sql/servers/firewallRules@2024-05-01-preview' = {
+  parent: sqlServer
+  name: 'AllowAzureServices'
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
+  }
+}
+
+resource sqlConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
+  parent: keyVault
+  name: 'sql-connection-string'
+  properties: {
+    value: sqlConnectionString
   }
 }
 
@@ -206,7 +255,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
     serverFarmId: hostingPlan.id
     httpsOnly: true
     siteConfig: {
-      linuxFxVersion: 'DOTNET-ISOLATED|8.0'
+      linuxFxVersion: 'DOTNET-ISOLATED|10.0'
       alwaysOn: false
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
@@ -229,21 +278,38 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
 
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Logic App API Connections
+// ──────────────────────────────────────────────────────────────────────────────
+
+resource blobConnection 'Microsoft.Web/connections@2016-06-01' = {
+  name: 'azureblob'
+  location: location
+  properties: {
+    displayName: 'azureblob'
+    api: {
+      id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureblob')
+    }
+  }
+}
+
+resource formRecognizerConnection 'Microsoft.Web/connections@2016-06-01' = {
+  name: 'formrecognizer'
+  location: location
+  properties: {
+    displayName: 'formrecognizer'
+    api: {
+      id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'formrecognizer')
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Logic App Workflow
 // ──────────────────────────────────────────────────────────────────────────────
 
 var workflowTemplate = loadTextContent('./logic-app/workflow.json')
-
 var workflowDefinition = json(
-  replace(
-    replace(
-      replace(
-        replace(workflowTemplate,
-          '__SUB_ID__',        subscription().subscriptionId),
-          '__STORAGE_NAME__',  storageAccountName),
-          '__NOTIFICATION_EMAIL__', notificationEmail),
-          '__ACS_SENDER__',    ''
-  )
+  replace(workflowTemplate, '__STORAGE_ACCOUNT_NAME__', storageAccountName)
 )
 
 resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
@@ -257,6 +323,34 @@ resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
   properties: {
     state: 'Enabled'
     definition: workflowDefinition
+    parameters: {
+      '$connections': {
+        value: {
+          azureblob: {
+            connectionId: blobConnection.id
+            connectionName: 'azureblob'
+            connectionProperties: {
+              authentication: {
+                type: 'ManagedServiceIdentity'
+                identity: identity.id
+              }
+            }
+            id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'azureblob')
+          }
+          formrecognizer: {
+            connectionId: formRecognizerConnection.id
+            connectionName: 'formrecognizer'
+            connectionProperties: {
+              authentication: {
+                type: 'ManagedServiceIdentity'
+                identity: identity.id
+              }
+            }
+            id: subscriptionResourceId('Microsoft.Web/locations/managedApis', location, 'formrecognizer')
+          }
+        }
+      }
+    }
   }
 }
 
@@ -273,3 +367,6 @@ output APP_INSIGHTS_CONNECTION_STRING string   = appInsights.properties.Connecti
 output KEY_VAULT_URI string                    = keyVault.properties.vaultUri
 output DOCUMENT_INTELLIGENCE_ENDPOINT string   = documentIntelligence.properties.endpoint
 output DOCUMENT_INTELLIGENCE_NAME string       = documentIntelligenceName
+output SQL_SERVER_FQDN string                  = sqlServer.properties.fullyQualifiedDomainName
+output SQL_DATABASE_NAME string                = sqlDatabaseName
+output SQL_CONNECTION_STRING_SECRET_NAME string = 'sql-connection-string'

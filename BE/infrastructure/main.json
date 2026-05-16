@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "4913109552225274669"
+      "templateHash": "14096730375592173470"
     }
   },
   "parameters": {
@@ -52,6 +52,14 @@
     "documentIntelligenceName": {
       "type": "string",
       "defaultValue": "[format('di-{0}-{1}', parameters('companyName'), toLower(parameters('environment')))]"
+    },
+    "sqlServerName": {
+      "type": "string",
+      "defaultValue": "[take(format('sql-{0}-{1}', parameters('companyName'), toLower(parameters('environment'))), 63)]"
+    },
+    "sqlDatabaseName": {
+      "type": "string",
+      "defaultValue": "workslip"
     }
   },
   "variables": {
@@ -66,8 +74,8 @@
       "environment": "[parameters('environment')]",
       "project": "[parameters('companyName')]"
     },
-    "workflowTemplate": "{\n  \"$schema\": \"https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#\",\n  \"contentVersion\": \"1.0.0.0\",\n  \"parameters\": {\n    \"$connections\": {\n      \"defaultValue\": {},\n      \"type\": \"Object\"\n    }\n  },\n  \"triggers\": {\n    \"When_a_blob_is_created_in_uploads\": {\n      \"type\": \"ApiConnection\",\n      \"inputs\": {\n        \"host\": {\n          \"connection\": {\n            \"name\": \"@parameters('$connections')['azureeventgrid']['connectionId']\"\n          }\n        },\n        \"method\": \"post\",\n        \"path\": \"/subscriptions/@encodeURIComponent('__SUB_ID__')/providers/@encodeURIComponent('Microsoft.Storage.StorageAccounts')/resource/@encodeURIComponent('__STORAGE_NAME__')/events/@encodeURIComponent('Microsoft.Storage.BlobCreated')\"\n      },\n      \"recurrence\": {\n        \"frequency\": \"Minute\",\n        \"interval\": 3\n      }\n    }\n  },\n  \"actions\": {\n    \"Get_file_from_uploads\": {\n      \"type\": \"ApiConnection\",\n      \"inputs\": {\n        \"host\": {\n          \"connection\": {\n            \"name\": \"@parameters('$connections')['azureblob']['connectionId']\"\n          }\n        },\n        \"method\": \"get\",\n        \"path\": \"/datasets/default/GetFileByPath\",\n        \"queries\": {\n          \"path\": \"@{triggerOutputs()?['body']['subject']}\"\n        }\n      },\n      \"runAfter\": {}\n    },\n    \"Analyze_with_Document_Intelligence\": {\n      \"type\": \"ApiConnection\",\n      \"inputs\": {\n        \"host\": {\n          \"connection\": {\n            \"name\": \"@parameters('$connections')['formrecognizer']['connectionId']\"\n          }\n        },\n        \"method\": \"post\",\n        \"body\": \"@body('Get_file_from_uploads')\",\n        \"path\": \"/connectorinternaldocumentintelligence/documentModels/@{encodeURIComponent('prebuilt-layout')}:analyze\",\n        \"queries\": {\n          \"api-version\": \"2024-11-30\"\n        }\n      },\n      \"runAfter\": {\n        \"Get_file_from_uploads\": [\"Succeeded\"]\n      }\n    },\n    \"Store_raw_analysis\": {\n      \"type\": \"ApiConnection\",\n      \"inputs\": {\n        \"host\": {\n          \"connection\": {\n            \"name\": \"@parameters('$connections')['azureblob']['connectionId']\"\n          }\n        },\n        \"method\": \"put\",\n        \"body\": \"@body('Analyze_with_Document_Intelligence')\",\n        \"path\": \"/datasets/default/UpdateFile\",\n        \"queries\": {\n          \"path\": \"/documents/@{outputs('Extract_file_name')}/analysis.json\"\n        }\n      },\n      \"runAfter\": {\n        \"Extract_file_name\": [\"Succeeded\"],\n        \"Analyze_with_Document_Intelligence\": [\"Succeeded\"]\n      }\n    },\n    \"Extract_file_name\": {\n      \"type\": \"Compose\",\n      \"inputs\": \"@first(split(last(split(triggerOutputs()?['body']['subject'], '/')), '.'))\",\n      \"runAfter\": {\n        \"Analyze_with_Document_Intelligence\": [\"Succeeded\"]\n      }\n    },\n    \"Create_HTML_report\": {\n      \"type\": \"Compose\",\n      \"inputs\": \"<!DOCTYPE html><html lang=\\\"da\\\"><head><meta charset=\\\"utf-8\\\"><title>Workslip rapport - @{outputs('Extract_file_name')}</title><style>body{font-family:system-ui,-apple-system,sans-serif;max-width:960px;margin:40px auto;padding:0 20px;color:#1a1a1a;line-height:1.6}h1{color:#1a3a5c;border-bottom:3px solid #2563eb;padding-bottom:10px}.meta{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:20px 0}.meta dt{font-weight:600;color:#475569;font-size:.85rem;text-transform:uppercase;letter-spacing:.5px}.meta dd{margin:0 0 10px 0}.meta dd:last-child{margin-bottom:0}h2{color:#1e3a5f;margin-top:32px;margin-bottom:8px}.content-box{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:20px;white-space:pre-wrap;word-wrap:break-word;font-family:Georgia,serif;font-size:1rem;line-height:1.7;max-height:800px;overflow-y:auto}.table-list{list-style:none;padding:0;display:grid;gap:24px}.table-card{border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}.table-card h3{background:#f1f5f9;margin:0;padding:10px 16px;font-size:.95rem;color:#334155}.table-card table{border-collapse:collapse;width:100%}.table-card th,.table-card td{border:1px solid #e2e8f0;padding:8px 12px;text-align:left;font-size:.875rem}.table-card th{background:#f8fafc;font-weight:600;color:#475569}.footer{margin-top:48px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:.8rem;color:#94a3b8;text-align:center}</style></head><body><h1>Workslip rapport</h1><dl class=\\\"meta\\\"><dt>Filnavn</dt><dd>@{outputs('Extract_file_name')}</dd><dt>Behandlet</dt><dd>@{utcNow('ddd MMM dd yyyy HH:mm:ss')}</dd><dt>Sider</dt><dd>@{length(body('Analyze_with_Document_Intelligence')?['analyzeResult']?['pages'])}</dd><dt>Tabeller fundet</dt><dd>@{length(body('Analyze_with_Document_Intelligence')?['analyzeResult']?['tables'])}</dd></dl><h2>UdtrÃ¦kket indhold</h2><div class=\\\"content-box\\\">@{body('Analyze_with_Document_Intelligence')?['analyzeResult']?['content']}</div></body></html>\",\n      \"runAfter\": {\n        \"Extract_file_name\": [\"Succeeded\"]\n      }\n    },\n    \"Store_HTML_report\": {\n      \"type\": \"ApiConnection\",\n      \"inputs\": {\n        \"host\": {\n          \"connection\": {\n            \"name\": \"@parameters('$connections')['azureblob']['connectionId']\"\n          }\n        },\n        \"method\": \"put\",\n        \"body\": \"@{outputs('Create_HTML_report')}\",\n        \"path\": \"/datasets/default/UpdateFile\",\n        \"queries\": {\n          \"path\": \"/documents/@{outputs('Extract_file_name')}/report.html\"\n        }\n      },\n      \"runAfter\": {\n        \"Create_HTML_report\": [\"Succeeded\"]\n      }\n    },\n    \"Send_notification_email\": {\n      \"type\": \"ApiConnection\",\n      \"inputs\": {\n        \"host\": {\n          \"connection\": {\n            \"name\": \"@parameters('$connections')['outlook']['connectionId']\"\n          }\n        },\n        \"method\": \"post\",\n        \"body\": {\n          \"To\": \"__NOTIFICATION_EMAIL__\",\n          \"Subject\": \"Ny workslip behandlet\",\n          \"Body\": \"<p>En ny workslip er blevet behandlet.</p><p><b>Fil:</b> @{outputs('Extract_file_name')}</p><p><b>Tid:</b> @{utcNow()}</p>\",\n          \"Importance\": \"Normal\"\n        },\n        \"path\": \"/v2/Mail\"\n      },\n      \"runAfter\": {\n        \"Store_HTML_report\": [\"Succeeded\"]\n      }\n    }\n  },\n  \"outputs\": {}\n}\n",
-    "workflowDefinition": "[json(replace(replace(replace(replace(variables('workflowTemplate'), '__SUB_ID__', subscription().subscriptionId), '__STORAGE_NAME__', parameters('storageAccountName')), '__NOTIFICATION_EMAIL__', parameters('notificationEmail')), '__ACS_SENDER__', ''))]"
+    "sqlAdminPassword": "[uniqueString(resourceGroup().id, parameters('environment'), 'sql-admin')]",
+    "sqlConnectionString": "[format('Server=tcp:{0}.database.windows.net,1433;Database={1};User ID=workslipadmin;Password={2};TrustServerCertificate=False;Encrypt=True;', toLower(parameters('sqlServerName')), parameters('sqlDatabaseName'), variables('sqlAdminPassword'))]"
   },
   "resources": [
     {
@@ -219,7 +227,7 @@
       "location": "[parameters('location')]",
       "kind": "FormRecognizer",
       "sku": {
-        "name": "S0"
+        "name": "F0"
       },
       "tags": "[variables('tags')]",
       "identity": {
@@ -229,7 +237,7 @@
         }
       },
       "properties": {
-        "restore": true,
+        "restore": false,
         "customSubDomainName": "[parameters('documentIntelligenceName')]",
         "publicNetworkAccess": "Enabled"
       },
@@ -250,6 +258,59 @@
       "dependsOn": [
         "[resourceId('Microsoft.CognitiveServices/accounts', parameters('documentIntelligenceName'))]",
         "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Sql/servers",
+      "apiVersion": "2024-05-01-preview",
+      "name": "[toLower(parameters('sqlServerName'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]",
+      "properties": {
+        "administratorLogin": "workslipadmin",
+        "administratorLoginPassword": "[variables('sqlAdminPassword')]",
+        "minimalTlsVersion": "1.2",
+        "publicNetworkAccess": "Enabled"
+      }
+    },
+    {
+      "type": "Microsoft.Sql/servers/databases",
+      "apiVersion": "2024-05-01-preview",
+      "name": "[format('{0}/{1}', toLower(parameters('sqlServerName')), parameters('sqlDatabaseName'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]",
+      "sku": {
+        "name": "Basic"
+      },
+      "properties": {
+        "collation": "SQL_Latin1_General_CP1_CI_AS",
+        "maxSizeBytes": 2147483648
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', toLower(parameters('sqlServerName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Sql/servers/firewallRules",
+      "apiVersion": "2024-05-01-preview",
+      "name": "[format('{0}/{1}', toLower(parameters('sqlServerName')), 'AllowAzureServices')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "0.0.0.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', toLower(parameters('sqlServerName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2023-02-01",
+      "name": "[format('{0}/{1}', parameters('keyVaultName'), 'sql-connection-string')]",
+      "properties": {
+        "value": "[variables('sqlConnectionString')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
       ]
     },
     {
@@ -284,7 +345,7 @@
         "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('asp-{0}-{1}', parameters('companyName'), toLower(parameters('environment'))))]",
         "httpsOnly": true,
         "siteConfig": {
-          "linuxFxVersion": "DOTNET-ISOLATED|8.0",
+          "linuxFxVersion": "DOTNET-ISOLATED|10.0",
           "alwaysOn": false,
           "minTlsVersion": "1.2",
           "ftpsState": "Disabled",
@@ -358,8 +419,7 @@
         }
       },
       "properties": {
-        "state": "Enabled",
-        "definition": "[variables('workflowDefinition')]"
+        "state": "Enabled"
       },
       "dependsOn": [
         "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]"
@@ -402,6 +462,18 @@
     "DOCUMENT_INTELLIGENCE_NAME": {
       "type": "string",
       "value": "[parameters('documentIntelligenceName')]"
+    },
+    "SQL_SERVER_FQDN": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Sql/servers', toLower(parameters('sqlServerName'))), '2024-05-01-preview').fullyQualifiedDomainName]"
+    },
+    "SQL_DATABASE_NAME": {
+      "type": "string",
+      "value": "[parameters('sqlDatabaseName')]"
+    },
+    "SQL_CONNECTION_STRING_SECRET_NAME": {
+      "type": "string",
+      "value": "sql-connection-string"
     }
   }
 }

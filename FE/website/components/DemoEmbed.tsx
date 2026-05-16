@@ -15,7 +15,6 @@ export default function DemoEmbed() {
             <a className="demo-primary" href={demoUrl} target="_blank" rel="noreferrer">
               Åbn demo i ny fane
             </a>
-            <span>Hvis demoen ikke vises, skal Workslip-app’en være startet på port 3001.</span>
           </div>
         </div>
 
