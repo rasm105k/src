@@ -74,20 +74,20 @@ export default function Home() {
   const [showDescriptionError, setShowDescriptionError] = useState(false);
   const [description, setDescription] = useState("");
   const [showInlineConfirm, setShowInlineConfirm] = useState(false);
-  const [customerName, setCustomerName] = useState("Aarhus Ejendomme ApS");
+  const [customerName, setCustomerName] = useState("Aarhus VVS Aps");
   const [address, setAddress] = useState("Trøjborgvej 12, 8200 Aarhus N");
-  const [contactPerson, setContactPerson] = useState("Mette Jensen");
-  const [phone, setPhone] = useState("26 75 09 81");
+  const [contactPerson, setContactPerson] = useState("");
+  const [phone, setPhone] = useState("28 92 91 73");
   const [date, setDate] = useState("2026-05-15");
-  const [reportNumber, setReportNumber] = useState("4V05-001");
-  const [customerNotes, setCustomerNotes] = useState("");
+  const [reportNumber, setReportNumber] = useState("1337");
+  const [customerNotes, setCustomerNotes] = useState("Toilet udskiftet");
   const [expandedSummaryStages, setExpandedSummaryStages] = useState<string[]>([]);
   const signedInUser = {
-    name: "Niels Petersen",
+    name: "Rasmus Bak",
     role: "Montør",
     organization: "Aarhus VVS ApS",
     identityProvider: "MitID Erhverv",
-    assurance: "Godkendt med Face ID på denne telefon"
+    assurance: "Godkendt med Face ID"
   };
 
   const currentIndex = stepOrder.indexOf(currentStep);
@@ -233,7 +233,7 @@ export default function Home() {
   );
 
   const primaryLabel =
-    currentStep === "signature" ? "Attestér og send" : currentStep === "done" ? "Ny rapport" : "Fortsæt";
+    currentStep === "signature" ? "Send" : currentStep === "done" ? "Ny rapport" : "Fortsæt";
 
   return (
     <main className="app-shell">
@@ -324,12 +324,12 @@ export default function Home() {
           {currentStep === "categories" && (
             <StepFrame
               title="Kategorier"
-              lead="Vælg anlægstype og arbejdstype hurtigt. Kontrolskemaet tilpasses automatisk bagefter."
+              lead="Vælg anlægstype og arbejdstype."
             >
               <section className="category-panel" aria-labelledby="installation-category">
                 <div className="section-heading">
                   <h2 id="installation-category">Anlægstype</h2>
-                  <p>Vælg en eller flere fra kundens 4V05-skema.</p>
+                  <p>Vælg en eller flere fra 4V05-skema.</p>
                 </div>
                 <div className="chip-grid" aria-label="Anlægstype">
                   {installationTypes.map((installation) => {
@@ -380,14 +380,14 @@ export default function Home() {
                   </div>
                 )}
                 {selectedWorkKind?.requiresCustomText && (
-                  <Field label="Ret opgavetype" hint="Skriv den tekst der skal stå på arbejdssedlen.">
+                  <Field label="Ret opgavetype">
                     <input
                       value={customWorkKind}
                       onChange={(event) => {
                         setCustomWorkKind(event.target.value);
                         setCategoryErrors([]);
                       }}
-                      placeholder="Fx serviceeftersyn, fejlsøgning eller rådgivning"
+                      placeholder="Fx serviceeftersyn eller rådgivning"
                     />
                   </Field>
                 )}
@@ -428,7 +428,7 @@ export default function Home() {
           {currentStep === "closure" && (
             <StepFrame
               title="Afslutning af sag"
-              lead="Marker sagens status og hvilke dokumenter der følger med. Ikke færdig kan ikke kombineres med færdig eller klar til faktura."
+              lead="Marker sagens status. 'Ikke færdig' kan ikke kombineres med 'færdig' eller 'klar til faktura'."
             >
               <div className="closure-grid" aria-label="Afslutning af sag">
                 {closureFlags.map((flag) => (

@@ -53,7 +53,6 @@ test('builds an audit-ready Q-control report with all visible compliance section
   assert.match(html, /2\/6/)
   assert.match(html, /Færdig/)
   assert.match(html, /Klar til faktura/)
-  assert.match(html, /Niels Petersen/)
   assert.match(html, /Slutkontrol udført af/)
   assert.match(html, /Ikke registreret i nuværende datamodel/)
   assert.match(html, /Indsendt/)

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Landing page",
-  description: "Mød ",
+  title: "Workslip demo",
+  description: "Digital 4V05 arbejdsseddel-demo for VVS-firmaer.",
 };
 
 export default function RootLayout({
@@ -12,13 +12,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="da">
       <body>
         <nav className="nav">
-          <div className="nav-logo">Landing page</div>
+          <div className="nav-logo">Workslip</div>
           <div className="nav-links">
+            <a href="#demo" className="nav-link">Demo</a>
             <a href="#features" className="nav-link">Features</a>
-            <a href="#contact" className="nav-cta">Get Started</a>
+            <a href="#contact" className="nav-cta">Kontakt</a>
           </div>
         </nav>
         {children}

@@ -43,7 +43,7 @@ const remarksList = [
   'Afprøvning af installationsgenstande uden anmærkninger.',
 ]
 
-const technicians = ['Niels Petersen', 'Thomas Mikkelsen', 'Kim Andersen', 'Rasmus Bæk', 'Morten Hjort', 'Lasse Jensen']
+const technicians = ['Rasmus Bak', 'Thomas Mikkelsen', 'Kim Andersen', 'Rasmus Bæk', 'Morten Hjort', 'Lasse Jensen']
 
 export const installationTypeLabels: Record<InstallationType, string> = {
   gas: 'Gas',

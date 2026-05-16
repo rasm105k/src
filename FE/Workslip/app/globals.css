@@ -24,13 +24,16 @@
 
 html,
 body {
+  height: 100%;
   min-height: 100%;
+  overflow: hidden;
 }
 
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  overscroll-behavior: none;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -46,7 +49,9 @@ button {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   display: grid;
   grid-template-columns: minmax(360px, 414px) minmax(320px, 420px);
   align-items: center;
@@ -57,8 +62,9 @@ button {
 
 .phone {
   position: relative;
-  min-height: 844px;
-  max-height: calc(100vh - 48px);
+  height: calc(100vh - 48px);
+  min-height: 0;
+  max-height: 844px;
   background: var(--surface);
   border: 1px solid #d3dae6;
   border-radius: 30px;
@@ -137,6 +143,7 @@ button {
 
 .screen {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 20px 18px 112px;
   background: linear-gradient(#fff, #f8fafc);
@@ -1110,6 +1117,7 @@ select:focus {
 
 .bottom-bar {
   position: absolute;
+  z-index: 10;
   left: 18px;
   right: 18px;
   bottom: 18px;
@@ -1219,12 +1227,15 @@ p.bottom-error {
 @media (max-width: 860px) {
   .app-shell {
     display: block;
+    height: 100vh;
+    overflow: hidden;
     padding: 0;
   }
 
   .phone {
     width: 100%;
-    min-height: 100vh;
+    height: 100vh;
+    min-height: 0;
     max-height: none;
     border: 0;
     border-radius: 0;
@@ -1235,7 +1246,14 @@ p.bottom-error {
     display: none;
   }
 
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 9;
+  }
+
 .bottom-bar {
+    position: fixed;
     left: 12px;
     right: 12px;
     bottom: 10px;

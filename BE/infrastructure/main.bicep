@@ -241,7 +241,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
 // Used by the Workslip PWA and Backoffice for report persistence and editing.
 // ──────────────────────────────────────────────────────────────────────────────
 
-resource workslipSqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
+/*resource workslipSqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
   name: toLower(workslipSqlServerName)
   location: location
   tags: tags
@@ -285,7 +285,7 @@ resource workslipSqlFirewallRules 'Microsoft.Sql/servers/firewallRules@2024-05-0
     startIpAddress: range.startIpAddress
     endIpAddress: range.endIpAddress
   }
-}]
+}]*/
 
 resource workslipApiPlan 'Microsoft.Web/serverfarms@2024-04-01' = {
   name: workslipApiPlanName
@@ -376,5 +376,3 @@ output DOCUMENT_INTELLIGENCE_ENDPOINT string   = documentIntelligence.properties
 output DOCUMENT_INTELLIGENCE_NAME string       = documentIntelligenceName
 output WORKSLIP_API_NAME string                = workslipApi.name
 output WORKSLIP_API_URL string                 = 'https://${workslipApi.properties.defaultHostName}'
-output WORKSLIP_SQL_SERVER_FQDN string         = workslipSqlServer.properties.fullyQualifiedDomainName
-output WORKSLIP_SQL_DATABASE_NAME string       = workslipSqlDatabase.name
