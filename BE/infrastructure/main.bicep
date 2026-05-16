@@ -2,28 +2,21 @@ param companyName string = ''
 param location string = resourceGroup().location
 param environment string = 'dev'
 param notificationEmail string = ''
-
 param functionAppName string          = 'func-${companyName}-${toLower(environment)}'
 param storageAccountName string       = take('st${companyName}${toLower(environment)}', 24)
 param logicAppName string             = 'la-${companyName}-${toLower(environment)}'
 param appInsightsName string          = 'ai-${companyName}-${toLower(environment)}'
-param logAnalyticsName string         = 'law-${companyName}-${toLower(environment)}'
 param identityName string             = 'id-${companyName}-${toLower(environment)}'
 param keyVaultName string             = take('kv-${companyName}-${toLower(environment)}', 24)
 param documentIntelligenceName string = 'di-${companyName}-${toLower(environment)}'
-param workslipApiName string          = 'app-workslip-${companyName}-${toLower(environment)}'
-param workslipApiPlanName string      = 'asp-workslip-${companyName}-${toLower(environment)}'
-param workslipSqlServerName string    = take('sql-workslip-${companyName}-${toLower(environment)}', 63)
-param workslipSqlDatabaseName string  = 'workslip'
-param workslipSqlAdminLogin string    = 'workslipadmin'
-
-@secure()
-param workslipSqlAdminPassword string = ''
-
+param workslipApiName string          = 'app-qrapport-${companyName}-${toLower(environment)}'
+param workslipApiPlanName string      = 'asp-qrapport-${companyName}-${toLower(environment)}'
+param workslipSqlServerName string    = take('sql-qrapport-${companyName}-${toLower(environment)}', 63)
+param workslipSqlDatabaseName string  = 'qrapport'
+param workslipSqlLocation string = ''
 param workslipApiSkuName string       = 'B1'
 param workslipSqlSkuName string       = 'Basic'
 param workslipSqlAllowedIpRanges array = []
-param workslipSqlLocation string = location
 
 // ── Role definition IDs ───────────────────────────────────────────────────────
 // Centralised here so they're easy to audit and update.
@@ -56,15 +49,6 @@ resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' 
 // Monitoring
 // ──────────────────────────────────────────────────────────────────────────────
 
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: logAnalyticsName
-  location: location
-  tags: tags
-  sku: { name: 'PerGB2018' }
-  properties: {
-    retentionInDays: 30
-  }
-}
 
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: appInsightsName
@@ -73,7 +57,6 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   tags: tags
   properties: {
     Application_Type: 'web'
-    WorkspaceResourceId: logAnalytics.id
   }
 }
 
@@ -260,11 +243,13 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
 
 resource workslipSqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
   name: toLower(workslipSqlServerName)
-  location: workslipSqlLocation
+  location: location
   tags: tags
+    identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: { '${identity.id}': {} }
+  }
   properties: {
-    administratorLogin: workslipSqlAdminLogin
-    administratorLoginPassword: workslipSqlAdminPassword
     minimalTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
   }
@@ -273,7 +258,7 @@ resource workslipSqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
 resource workslipSqlDatabase 'Microsoft.Sql/servers/databases@2024-05-01-preview' = {
   parent: workslipSqlServer
   name: workslipSqlDatabaseName
-  location: workslipSqlLocation
+  location: location
   tags: tags
   sku: {
     name: workslipSqlSkuName
@@ -336,7 +321,6 @@ resource workslipApi 'Microsoft.Web/sites@2024-04-01' = {
         { name: 'ASPNETCORE_ENVIRONMENT',              value: environment == 'prod' ? 'Production' : 'Development' }
         { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
         { name: 'AZURE_CLIENT_ID',                     value: identity.properties.clientId }
-        { name: 'ConnectionStrings__WorkslipDb',       value: 'Server=tcp:${workslipSqlServer.properties.fullyQualifiedDomainName},1433;Initial Catalog=${workslipSqlDatabase.name};Persist Security Info=False;User ID=${workslipSqlAdminLogin};Password=${workslipSqlAdminPassword};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
       ]
     }
   }
