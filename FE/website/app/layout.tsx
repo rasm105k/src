@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Workslip demo",
+  title: "Flogma",
   description: "Digital 4V05 arbejdsseddel-demo for VVS-firmaer.",
 };
 
@@ -18,7 +18,7 @@ export default function RootLayout({
           <div className="nav-logo">Workslip</div>
           <div className="nav-links">
             <a href="#demo" className="nav-link">Demo</a>
-            <a href="#features" className="nav-link">Features</a>
+            <a href="#features" className="nav-link">Funktioner</a>
             <a href="#contact" className="nav-cta">Kontakt</a>
           </div>
         </nav>

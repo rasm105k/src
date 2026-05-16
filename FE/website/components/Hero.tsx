@@ -4,12 +4,12 @@ export default function Hero() {
   return (
     <section className="hero">
       <div className="container">
-        <h1>Accelerate Your Business Growth</h1>
+        <h1>Digital 4V05-arbejdsseddel til dit VVS-firma</h1>
         <p>
-          The all-in-one platform to generate leads, manage your pipeline, and scale faster than ever.
+          Workslip gør det nemt at udfylde, attestere og arkivere dine 4V05-rapporter — helt digitalt.
         </p>
         <a href="#contact" className="hero-cta">
-          Get Started Now
+          Kontakt os
         </a>
       </div>
     </section>

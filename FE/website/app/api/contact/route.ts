@@ -6,13 +6,13 @@ export async function POST(request: Request) {
     const { full_name, email, message } = body;
 
     if (!full_name || !email || !message) {
-      return NextResponse.json({ message: "All fields are required" }, { status: 400 });
+      return NextResponse.json({ message: "Alle felter skal udfyldes" }, { status: 400 });
     }
 
     console.log("Contact form submission:", { full_name, email, message });
 
     return NextResponse.json({ ok: true });
   } catch {
-    return NextResponse.json({ message: "Invalid request" }, { status: 400 });
+    return NextResponse.json({ message: "Ugyldig forespørgsel" }, { status: 400 });
   }
 }
