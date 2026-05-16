@@ -88,29 +88,7 @@ function hasFinalControl(workslip: Workslip): boolean {
   )
 }
 
-export function buildQControlReportHtml(workslip: Workslip): string {
-  const installationTypes = workslip.installationTypes
-    .map((type) => installationTypeLabels[type])
-    .join(', ')
-
-  const workKind = workslip.workKind === 'serviceAndet'
-    ? workslip.customWorkKind || workKindLabels[workslip.workKind]
-    : workKindLabels[workslip.workKind]
-
-  const closureFlags = workslip.closureFlags.length
-    ? workslip.closureFlags.map((flag) => `<span class="pill">${escapeHtml(closureFlagLabels[flag])}</span>`).join('')
-    : '<span class="muted">Ingen afslutningsmarkeringer.</span>'
-  const finalControlResult = hasFinalControl(workslip)
-    ? 'Slutkontrolpunkter registreret'
-    : 'Ingen slutkontrolpunkter registreret'
-
-  return `<!doctype html>
-<html lang="da">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Q-kontrol rapport - ${escapeHtml(workslip.reportNumber)}</title>
-  <style>
+const Q_CONTROL_STYLES = `
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -304,13 +282,25 @@ export function buildQControlReportHtml(workslip: Workslip): string {
         box-shadow: none;
       }
     }
-  </style>
-</head>
-<body>
-  <div class="actions">
-    <button onclick="window.print()">Gem som PDF / print</button>
-  </div>
-  <main class="page">
+  `
+
+function buildQControlReportBody(workslip: Workslip): string {
+  const installationTypes = workslip.installationTypes
+    .map((type) => installationTypeLabels[type])
+    .join(', ')
+
+  const workKind = workslip.workKind === 'serviceAndet'
+    ? workslip.customWorkKind || workKindLabels[workslip.workKind]
+    : workKindLabels[workslip.workKind]
+
+  const closureFlags = workslip.closureFlags.length
+    ? workslip.closureFlags.map((flag) => `<span class="pill">${escapeHtml(closureFlagLabels[flag])}</span>`).join('')
+    : '<span class="muted">Ingen afslutningsmarkeringer.</span>'
+  const finalControlResult = hasFinalControl(workslip)
+    ? 'Slutkontrolpunkter registreret'
+    : 'Ingen slutkontrolpunkter registreret'
+
+  return `
     <header>
       <div>
         <h1>Q-kontrol rapport</h1>
@@ -392,8 +382,53 @@ export function buildQControlReportHtml(workslip: Workslip): string {
           ${escapeHtml(formatDateTime(workslip.processedAt))}
         </div>
       </div>
-    </section>
-  </main>
+    </section>`
+}
+
+export function buildQControlReportHtml(workslip: Workslip): string {
+  return `<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Q-kontrol rapport - ${escapeHtml(workslip.reportNumber)}</title>
+  <style>${Q_CONTROL_STYLES}</style>
+</head>
+<body>
+  <div class="actions">
+    <button onclick="window.print()">Gem som PDF / print</button>
+  </div>
+  <main class="page">${buildQControlReportBody(workslip)}</main>
+</body>
+</html>`
+}
+
+export function buildCombinedQControlReportHtml(workslips: Workslip[]): string {
+  const bodiesHtml = workslips
+    .map((w, i) => {
+      const cls = i < workslips.length - 1 ? 'page page-break' : 'page'
+      return `<main class="${cls}">${buildQControlReportBody(w)}</main>`
+    })
+    .join('\n')
+
+  return `<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Samlet udtræk - Q-kontrol rapporter</title>
+  <style>
+    ${Q_CONTROL_STYLES}
+    .page-break { page-break-after: always; }
+    .actions span { color: #6b7280; font-size: 12px; align-self: center; }
+  </style>
+</head>
+<body>
+  <div class="actions">
+    <button onclick="window.print()">Gem som PDF / print</button>
+    <span>${workslips.length} rapporter</span>
+  </div>
+  ${bodiesHtml}
 </body>
 </html>`
 }
@@ -407,6 +442,21 @@ export function openQControlReport(workslip: Workslip): void {
 
   popup.document.open()
   popup.document.write(buildQControlReportHtml(workslip))
+  popup.document.close()
+  popup.focus()
+}
+
+export function openCombinedQControlReport(workslips: Workslip[]): void {
+  if (workslips.length === 0) return
+
+  const popup = window.open('', '_blank', 'width=1100,height=900')
+
+  if (!popup) {
+    return
+  }
+
+  popup.document.open()
+  popup.document.write(buildCombinedQControlReportHtml(workslips))
   popup.document.close()
   popup.focus()
 }

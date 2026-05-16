@@ -28,6 +28,7 @@ import {
   Loader2,
   UploadCloud,
   Plus,
+  Download,
 } from 'lucide-react'
 import {
   generateMockWorkslips,
@@ -38,7 +39,7 @@ import {
   controlStageDefs,
   installationToControlColumns,
 } from '@/lib/mock-data'
-import { openQControlReport } from '@/lib/q-control-report'
+import { openQControlReport, openCombinedQControlReport } from '@/lib/q-control-report'
 import type { Workslip, WorkslipStatus, InstallationType, ClosureFlag, WorkKind } from '@/lib/types'
 
 const statusConfig: Record<WorkslipStatus, { label: string; color: string }> = {
@@ -75,6 +76,134 @@ function StatusBadge({ status }: { status: WorkslipStatus }) {
       {cfg.label}
     </span>
   )
+}
+
+function openWrittenReport(workslip: Workslip): void {
+  const popup = window.open('', '_blank', 'width=900,height=800')
+  if (!popup) return
+
+  const statusLabel = statusConfig[workslip.status].label
+
+  popup.document.open()
+  popup.document.write(`<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <title>Skriftlig rapport - ${workslip.reportNumber}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f3f4f6;
+      color: #111827;
+      font-family: Georgia, 'Times New Roman', serif;
+      line-height: 1.6;
+      font-size: 13px;
+    }
+    .page {
+      max-width: 210mm;
+      margin: 20px auto;
+      background: white;
+      padding: 22mm 24mm;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      min-height: 297mm;
+    }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .subtitle { color: #6b7280; font-size: 13px; margin: 0 0 20px; }
+    h2 {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #374151;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 6px;
+      margin: 20px 0 10px;
+    }
+    .field { margin-bottom: 6px; }
+    .field dt { color: #9ca3af; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .field dd { margin: 0 0 0 12px; font-size: 13px; }
+    .sep { margin: 20px 0; border: 0; border-top: 1px solid #e5e7eb; }
+    p { margin: 0 0 8px; }
+    .pill {
+      display: inline-block;
+      border: 1px solid #d1d5db;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      margin: 2px 4px 2px 0;
+    }
+    .tag {
+      display: inline-block;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 11px;
+      margin: 1px 3px 1px 0;
+    }
+    .meta { color: #6b7280; font-family: Arial, sans-serif; font-size: 12px; }
+    .actions {
+      position: sticky; top: 0; display: flex; justify-content: center; gap: 8px;
+      background: rgba(243,244,246,0.9); backdrop-filter: blur(8px); padding: 12px;
+    }
+    .actions button {
+      border: 0; border-radius: 8px; background: #111827; color: white;
+      cursor: pointer; font-weight: 700; padding: 10px 14px;
+    }
+    @page { size: A4; margin: 16mm; }
+    @media print {
+      body { background: white; }
+      .actions { display: none; }
+      .page { box-shadow: none; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="actions">
+    <button onclick="window.print()">Gem som PDF / print</button>
+  </div>
+  <div class="page">
+    <h1>Skriftlig rapport</h1>
+    <p class="subtitle">${workslip.reportNumber} &mdash; ${statusLabel}</p>
+
+    <h2>Kunde og adresse</h2>
+    <p>${escHtml(workslip.customerName)}<br/>
+    ${escHtml(workslip.address)}<br/>
+    Att.: ${escHtml(workslip.contactPerson)}<br/>
+    Tlf.: ${escHtml(workslip.phone)}</p>
+
+    <h2>Arbejdet</h2>
+    <p><strong>Montør:</strong> ${escHtml(workslip.technicianName)}<br/>
+    <strong>Dato:</strong> ${new Date(workslip.date).toLocaleDateString('da-DK', { day: '2-digit', month: 'long', year: 'numeric' })}<br/>
+    <strong>Anlægstype:</strong> ${workslip.installationTypes.map(t => installationTypeLabels[t]).join(', ')}<br/>
+    <strong>Arbejdstype:</strong> ${workslip.workKind === 'serviceAndet' ? escHtml(workslip.customWorkKind) : workKindLabels[workslip.workKind]}</p>
+    <p><strong>Beskrivelse:</strong><br/>${escHtml(workslip.description)}</p>
+    ${workslip.customerInfo ? `<p><strong>Oplysninger til kunden:</strong><br/>${escHtml(workslip.customerInfo)}</p>` : ''}
+
+    <h2>Kontrolpunkter</h2>
+    ${workslip.controlStages.map(s =>
+      `<p><strong>${escHtml(s.stageTitle)}</strong> (${s.checkedItems.length}/${s.totalItems})<br/>
+      ${s.checkedItems.length > 0 ? s.checkedItems.map(i => escHtml(i.label)).join('<br/>') : '<span style="color:#9ca3af">Ingen markeret</span>'}</p>`
+    ).join('')}
+    ${workslip.remarks ? `<h2>Bemærkninger</h2><p>${escHtml(workslip.remarks)}</p>` : ''}
+
+    <h2>Afslutning</h2>
+    <p>${workslip.closureFlags.map(f => `<span class="pill">${closureFlagLabels[f]}</span>`).join('') || 'Ingen'}</p>
+
+    <h2>Underskrift</h2>
+    <p><strong>Montør:</strong> ${escHtml(workslip.technicianName)}<br/>
+    <strong>Dato:</strong> ${new Date(workslip.signatureDate).toLocaleDateString('da-DK', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+
+    <hr class="sep" />
+    <p class="meta">Rapporten er genereret fra Workslip &mdash; ${new Date().toLocaleString('da-DK')}</p>
+  </div>
+</body>
+</html>`)
+  popup.document.close()
+  popup.focus()
+}
+
+function escHtml(v: unknown): string {
+  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 export default function BackofficePage() {
@@ -240,13 +369,23 @@ export default function BackofficePage() {
             {filtered.length} af {workslips.length} rapporter
           </p>
         </div>
-        <button
-          onClick={() => setShowImport(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
-        >
-          <Upload size={16} />
-          Importér dokumenter
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => openCombinedQControlReport(filtered)}
+            disabled={filtered.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Download size={16} />
+            Samlet udtræk
+          </button>
+          <button
+            onClick={() => setShowImport(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+          >
+            <Upload size={16} />
+            Importér dokumenter
+          </button>
+        </div>
       </div>
 
       {/* Filters bar */}
@@ -349,12 +488,21 @@ export default function BackofficePage() {
                     })}
                   </td>
                   <td className="px-4 py-3 pr-6">
-                    <button
-                      onClick={e => { e.stopPropagation(); openDetail(w) }}
-                      className="rounded-md p-1.5 text-gray-300 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                    >
-                      <Eye size={15} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={e => { e.stopPropagation(); openQControlReport(w) }}
+                        title="Vis original rapport"
+                        className="rounded-md p-1.5 text-gray-300 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                      >
+                        <FileText size={15} />
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); openDetail(w) }}
+                        className="rounded-md p-1.5 text-gray-300 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                      >
+                        <Eye size={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -439,13 +587,22 @@ export default function BackofficePage() {
             </div>
 
             <div className="border-t border-gray-100 px-6 py-4">
-              <button
-                onClick={() => openQControlReport(selected)}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800"
-              >
-                <FileText size={16} />
-                Åbn PDF-rapport
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => openQControlReport(selected)}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+                >
+                  <FileText size={16} />
+                  Åbn PDF-rapport
+                </button>
+                <button
+                  onClick={() => openWrittenReport(selected)}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  <FileText size={16} />
+                  Hent skriftlig rapport
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -7,9 +7,6 @@
     },
     "location": {
       "value": "westeurope"
-    },
-    "workslipSqlLocation": {
-      "value": "northeurope"
     }
   }
 }

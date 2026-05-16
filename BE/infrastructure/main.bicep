@@ -9,15 +9,6 @@ param appInsightsName string          = 'ai-${companyName}-${toLower(environment
 param identityName string             = 'id-${companyName}-${toLower(environment)}'
 param keyVaultName string             = take('kv-${companyName}-${toLower(environment)}', 24)
 param documentIntelligenceName string = 'di-${companyName}-${toLower(environment)}'
-param workslipApiName string          = 'app-qrapport-${companyName}-${toLower(environment)}'
-param workslipApiPlanName string      = 'asp-qrapport-${companyName}-${toLower(environment)}'
-param workslipSqlServerName string    = take('sql-qrapport-${companyName}-${toLower(environment)}', 63)
-param workslipSqlDatabaseName string  = 'qrapport'
-param workslipSqlLocation string = ''
-param workslipApiSkuName string       = 'B1'
-param workslipSqlSkuName string       = 'Basic'
-param workslipSqlAllowedIpRanges array = []
-
 // ── Role definition IDs ───────────────────────────────────────────────────────
 // Centralised here so they're easy to audit and update.
 var roles = {
@@ -171,7 +162,7 @@ resource documentIntelligence 'Microsoft.CognitiveServices/accounts@2023-05-01' 
     userAssignedIdentities: { '${identity.id}': {} }
   }
   properties: {
-    restore: false
+    restore: true
     customSubDomainName: documentIntelligenceName
     publicNetworkAccess: 'Enabled'
   }
@@ -236,98 +227,6 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Workslip API + Azure SQL
-// Used by the Workslip PWA and Backoffice for report persistence and editing.
-// ──────────────────────────────────────────────────────────────────────────────
-
-/*resource workslipSqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
-  name: toLower(workslipSqlServerName)
-  location: location
-  tags: tags
-    identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: { '${identity.id}': {} }
-  }
-  properties: {
-    minimalTlsVersion: '1.2'
-    publicNetworkAccess: 'Enabled'
-  }
-}
-
-resource workslipSqlDatabase 'Microsoft.Sql/servers/databases@2024-05-01-preview' = {
-  parent: workslipSqlServer
-  name: workslipSqlDatabaseName
-  location: location
-  tags: tags
-  sku: {
-    name: workslipSqlSkuName
-  }
-  properties: {
-    collation: 'SQL_Latin1_General_CP1_CI_AS'
-    maxSizeBytes: 2147483648
-  }
-}
-
-resource workslipSqlAllowAzureServices 'Microsoft.Sql/servers/firewallRules@2024-05-01-preview' = {
-  parent: workslipSqlServer
-  name: 'AllowAzureServices'
-  properties: {
-    startIpAddress: '0.0.0.0'
-    endIpAddress: '0.0.0.0'
-  }
-}
-
-resource workslipSqlFirewallRules 'Microsoft.Sql/servers/firewallRules@2024-05-01-preview' = [for range in workslipSqlAllowedIpRanges: {
-  parent: workslipSqlServer
-  name: range.name
-  properties: {
-    startIpAddress: range.startIpAddress
-    endIpAddress: range.endIpAddress
-  }
-}]*/
-
-resource workslipApiPlan 'Microsoft.Web/serverfarms@2024-04-01' = {
-  name: workslipApiPlanName
-  location: location
-  kind: 'linux'
-  sku: {
-    name: workslipApiSkuName
-  }
-  tags: tags
-  properties: {
-    reserved: true
-  }
-}
-
-resource workslipApi 'Microsoft.Web/sites@2024-04-01' = {
-  name: workslipApiName
-  location: location
-  kind: 'app,linux'
-  tags: tags
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: { '${identity.id}': {} }
-  }
-  properties: {
-    serverFarmId: workslipApiPlan.id
-    httpsOnly: true
-    siteConfig: {
-      linuxFxVersion: 'DOTNETCORE|10.0'
-      ftpsState: 'Disabled'
-      minTlsVersion: '1.2'
-      alwaysOn: true
-      appSettings: [
-        { name: 'ASPNETCORE_ENVIRONMENT',              value: environment == 'prod' ? 'Production' : 'Development' }
-        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
-        { name: 'AZURE_CLIENT_ID',                     value: identity.properties.clientId }
-      ]
-    }
-  }
-}
-
-
-
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Logic App Workflow
@@ -374,5 +273,3 @@ output APP_INSIGHTS_CONNECTION_STRING string   = appInsights.properties.Connecti
 output KEY_VAULT_URI string                    = keyVault.properties.vaultUri
 output DOCUMENT_INTELLIGENCE_ENDPOINT string   = documentIntelligence.properties.endpoint
 output DOCUMENT_INTELLIGENCE_NAME string       = documentIntelligenceName
-output WORKSLIP_API_NAME string                = workslipApi.name
-output WORKSLIP_API_URL string                 = 'https://${workslipApi.properties.defaultHostName}'
