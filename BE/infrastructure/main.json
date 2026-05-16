@@ -52,14 +52,6 @@
     "documentIntelligenceName": {
       "type": "string",
       "defaultValue": "[format('di-{0}-{1}', parameters('companyName'), toLower(parameters('environment')))]"
-    },
-    "sqlServerName": {
-      "type": "string",
-      "defaultValue": "[take(format('sql-{0}-{1}', parameters('companyName'), toLower(parameters('environment'))), 63)]"
-    },
-    "sqlDatabaseName": {
-      "type": "string",
-      "defaultValue": "workslip"
     }
   },
   "variables": {
@@ -73,9 +65,7 @@
     "tags": {
       "environment": "[parameters('environment')]",
       "project": "[parameters('companyName')]"
-    },
-    "sqlAdminPassword": "[uniqueString(resourceGroup().id, parameters('environment'), 'sql-admin')]",
-    "sqlConnectionString": "[format('Server=tcp:{0}.database.windows.net,1433;Database={1};User ID=workslipadmin;Password={2};TrustServerCertificate=False;Encrypt=True;', toLower(parameters('sqlServerName')), parameters('sqlDatabaseName'), variables('sqlAdminPassword'))]"
+    }
   },
   "resources": [
     {
@@ -261,54 +251,9 @@
       ]
     },
     {
-      "type": "Microsoft.Sql/servers",
-      "apiVersion": "2024-05-01-preview",
-      "name": "[toLower(parameters('sqlServerName'))]",
-      "location": "[parameters('location')]",
-      "tags": "[variables('tags')]",
-      "properties": {
-        "administratorLogin": "workslipadmin",
-        "administratorLoginPassword": "[variables('sqlAdminPassword')]",
-        "minimalTlsVersion": "1.2",
-        "publicNetworkAccess": "Enabled"
-      }
-    },
-    {
-      "type": "Microsoft.Sql/servers/databases",
-      "apiVersion": "2024-05-01-preview",
-      "name": "[format('{0}/{1}', toLower(parameters('sqlServerName')), parameters('sqlDatabaseName'))]",
-      "location": "[parameters('location')]",
-      "tags": "[variables('tags')]",
-      "sku": {
-        "name": "Basic"
-      },
-      "properties": {
-        "collation": "SQL_Latin1_General_CP1_CI_AS",
-        "maxSizeBytes": 2147483648
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Sql/servers', toLower(parameters('sqlServerName')))]"
-      ]
-    },
-    {
-      "type": "Microsoft.Sql/servers/firewallRules",
-      "apiVersion": "2024-05-01-preview",
-      "name": "[format('{0}/{1}', toLower(parameters('sqlServerName')), 'AllowAzureServices')]",
-      "properties": {
-        "startIpAddress": "0.0.0.0",
-        "endIpAddress": "0.0.0.0"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Sql/servers', toLower(parameters('sqlServerName')))]"
-      ]
-    },
-    {
       "type": "Microsoft.KeyVault/vaults/secrets",
       "apiVersion": "2023-02-01",
-      "name": "[format('{0}/{1}', parameters('keyVaultName'), 'sql-connection-string')]",
-      "properties": {
-        "value": "[variables('sqlConnectionString')]"
-      },
+      "name": "[format('{0}/{1}', parameters('keyVaultName')]",
       "dependsOn": [
         "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
       ]
@@ -462,18 +407,6 @@
     "DOCUMENT_INTELLIGENCE_NAME": {
       "type": "string",
       "value": "[parameters('documentIntelligenceName')]"
-    },
-    "SQL_SERVER_FQDN": {
-      "type": "string",
-      "value": "[reference(resourceId('Microsoft.Sql/servers', toLower(parameters('sqlServerName'))), '2024-05-01-preview').fullyQualifiedDomainName]"
-    },
-    "SQL_DATABASE_NAME": {
-      "type": "string",
-      "value": "[parameters('sqlDatabaseName')]"
-    },
-    "SQL_CONNECTION_STRING_SECRET_NAME": {
-      "type": "string",
-      "value": "sql-connection-string"
     }
   }
 }

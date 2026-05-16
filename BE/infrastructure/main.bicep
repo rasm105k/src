@@ -182,7 +182,7 @@ resource diRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 // ──────────────────────────────────────────────────────────────────────────────
 // Azure SQL Database
 // ──────────────────────────────────────────────────────────────────────────────
-
+/*
 var sqlAdminPassword = uniqueString(resourceGroup().id, environment, 'sql-admin')
 var sqlConnectionString = 'Server=tcp:${toLower(sqlServerName)}.database.windows.net,1433;Database=${sqlDatabaseName};User ID=workslipadmin;Password=${sqlAdminPassword};TrustServerCertificate=False;Encrypt=True;'
 
@@ -226,6 +226,7 @@ resource sqlConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01
     value: sqlConnectionString
   }
 }
+  */
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Function App
@@ -367,6 +368,3 @@ output APP_INSIGHTS_CONNECTION_STRING string   = appInsights.properties.Connecti
 output KEY_VAULT_URI string                    = keyVault.properties.vaultUri
 output DOCUMENT_INTELLIGENCE_ENDPOINT string   = documentIntelligence.properties.endpoint
 output DOCUMENT_INTELLIGENCE_NAME string       = documentIntelligenceName
-output SQL_SERVER_FQDN string                  = sqlServer.properties.fullyQualifiedDomainName
-output SQL_DATABASE_NAME string                = sqlDatabaseName
-output SQL_CONNECTION_STRING_SECRET_NAME string = 'sql-connection-string'
