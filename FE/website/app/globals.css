@@ -697,6 +697,654 @@ body {
   }
 }
 
+/* Personal assistant demo */
+.assistant-demo-section {
+  padding: 5rem 1rem;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
+}
+
+.assistant-demo-heading {
+  max-width: 48rem;
+  margin-bottom: 2rem;
+}
+
+.assistant-demo-heading h2 {
+  font-size: 2.5rem;
+  line-height: 1.08;
+  margin-bottom: 0.9rem;
+}
+
+.assistant-demo-heading p {
+  color: #4b5563;
+  font-size: 1.06rem;
+}
+
+.assistant-demo-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(320px, 1fr) minmax(340px, 1.1fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.call-card,
+.transcript-card,
+.owner-message-card {
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(16, 24, 40, 0.08);
+}
+
+.call-card,
+.transcript-card {
+  padding: 1rem;
+}
+
+.call-card-header,
+.transcript-header,
+.owner-message-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.call-card-header div:first-child,
+.transcript-header div,
+.owner-message-header div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.call-card-header span,
+.transcript-header span,
+.owner-message-header span,
+.owner-next-action span,
+.calendar-booking-top span,
+.assistant-note span {
+  display: block;
+  color: #667085;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.call-card-header strong,
+.transcript-header strong {
+  color: #111827;
+  font-size: 1rem;
+}
+
+.assistant-listener {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 999px;
+  color: #667085;
+  background: #f8fafc;
+  padding: 0.42rem 0.65rem;
+  white-space: nowrap;
+}
+
+.assistant-listener.active {
+  border-color: #b7e4c7;
+  background: #ecfdf3;
+  color: #087443;
+}
+
+.assistant-listener.active svg {
+  animation: listen-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes listen-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+.phone-surface {
+  min-height: 33.5rem;
+  display: grid;
+  align-content: start;
+  gap: 1.15rem;
+  overflow: hidden;
+  position: relative;
+  border: 8px solid #111827;
+  border-radius: 34px;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.34), transparent 24%),
+    radial-gradient(circle at 78% 20%, rgba(96, 165, 250, 0.34), transparent 28%),
+    linear-gradient(155deg, #101828 0%, #1e293b 42%, #0f766e 100%);
+  color: white;
+  padding: 0.85rem 1rem 1.15rem;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.phone-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(125deg, rgba(255, 255, 255, 0.14), transparent 38%),
+    rgba(255, 255, 255, 0.02);
+  pointer-events: none;
+}
+
+.iphone-status,
+.call-island,
+.phone-contact,
+.iphone-live-caption,
+.iphone-call-actions,
+.iphone-end-call {
+  position: relative;
+  z-index: 1;
+}
+
+.iphone-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.78rem;
+  font-weight: 850;
+  padding: 0 0.35rem;
+}
+
+.iphone-status-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+}
+
+.iphone-status-dots i {
+  width: 0.42rem;
+  height: 0.42rem;
+  display: block;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.call-island {
+  justify-self: center;
+  min-width: 11.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  background: rgba(3, 7, 18, 0.76);
+  color: rgba(255, 255, 255, 0.92);
+  padding: 0.45rem 0.72rem;
+  box-shadow: 0 12px 28px rgba(3, 7, 18, 0.28);
+}
+
+.call-island span {
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 999px;
+  background: #34d399;
+  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5);
+  animation: listen-pulse 1.2s ease-in-out infinite;
+}
+
+.call-island strong {
+  font-size: 0.74rem;
+  letter-spacing: 0;
+}
+
+.phone-contact {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  text-align: center;
+  padding-top: 0.25rem;
+}
+
+.contact-avatar {
+  width: 5.4rem;
+  height: 5.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(219, 234, 254, 0.72));
+  color: #0f172a;
+  font-size: 1.35rem;
+  font-weight: 900;
+  margin-bottom: 0.6rem;
+  box-shadow: 0 18px 38px rgba(3, 7, 18, 0.25);
+}
+
+.phone-contact span,
+.phone-contact small {
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 750;
+}
+
+.phone-contact strong {
+  font-size: 1.75rem;
+  line-height: 1.1;
+}
+
+.iphone-live-caption {
+  min-height: 7.6rem;
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(18px);
+  padding: 0.85rem;
+}
+
+.iphone-live-caption span {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.iphone-live-caption p {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.92rem;
+  line-height: 1.38;
+}
+
+.iphone-call-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin-top: auto;
+}
+
+.call-action {
+  min-height: 4.6rem;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.38rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+}
+
+.call-action svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.call-action b {
+  font-size: 0.7rem;
+}
+
+.call-action.active {
+  background: rgba(236, 253, 243, 0.2);
+  color: #d1fae5;
+}
+
+.iphone-end-call {
+  display: flex;
+  justify-content: center;
+}
+
+.iphone-end-call span {
+  width: 3.65rem;
+  height: 3.65rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #ef4444;
+  color: white;
+  box-shadow: 0 14px 30px rgba(127, 29, 29, 0.32);
+}
+
+.iphone-end-call svg {
+  transform: rotate(135deg);
+}
+
+.assistant-demo-button {
+  width: 100%;
+  min-height: 3.35rem;
+  margin-top: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 0;
+  border-radius: 8px;
+  background: #111827;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.assistant-demo-button:disabled {
+  cursor: wait;
+  background: #344054;
+}
+
+.assistant-demo-button:disabled svg {
+  animation: spin 1s linear infinite;
+}
+
+.transcript-header b {
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475467;
+  padding: 0.32rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.assistant-note-feed {
+  min-height: 29.35rem;
+  max-height: 29.35rem;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 0.8rem;
+}
+
+.transcript-empty,
+.owner-message-placeholder {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.65rem;
+  color: #667085;
+  text-align: center;
+}
+
+.transcript-empty span,
+.owner-message-placeholder span {
+  max-width: 20rem;
+}
+
+.assistant-note {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.7rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.75rem;
+}
+
+.note-marker {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #ecfdf3;
+  color: #087443;
+}
+
+.assistant-note strong {
+  display: block;
+  margin-top: 0.18rem;
+  color: #111827;
+  font-size: 0.98rem;
+}
+
+.assistant-note p {
+  margin-top: 0.3rem;
+  color: #344054;
+  line-height: 1.42;
+}
+
+.assistant-note small {
+  display: block;
+  margin-top: 0.5rem;
+  color: #667085;
+  font-weight: 750;
+}
+
+.owner-message-card {
+  padding: 1rem;
+  background:
+    linear-gradient(135deg, rgba(29, 78, 216, 0.04), rgba(8, 116, 67, 0.04)),
+    white;
+}
+
+.owner-message-header {
+  padding-bottom: 0.9rem;
+  border-bottom: 2px solid #111827;
+}
+
+.owner-message-header h3 {
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.owner-summary {
+  display: flex;
+  gap: 0.65rem;
+  border: 1px solid #b7e4c7;
+  border-radius: 8px;
+  background: #ecfdf3;
+  color: #087443;
+  padding: 0.85rem;
+}
+
+.owner-summary svg {
+  flex: none;
+}
+
+.owner-summary p {
+  color: #102a56;
+  font-weight: 800;
+  line-height: 1.38;
+}
+
+.owner-brief {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.8rem;
+}
+
+.owner-brief div {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.68rem 0.75rem;
+}
+
+.owner-brief svg {
+  flex: none;
+  color: #087443;
+  margin-top: 0.1rem;
+}
+
+.owner-brief p {
+  color: #344054;
+  font-weight: 750;
+  line-height: 1.38;
+}
+
+.calendar-booking-card {
+  display: grid;
+  gap: 0.8rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(16, 24, 40, 0.08);
+  padding: 0.85rem;
+  margin-top: 0.8rem;
+}
+
+.calendar-booking-top {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.calendar-booking-top b {
+  margin-left: auto;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 0.28rem 0.48rem;
+  font-size: 0.72rem;
+}
+
+.google-calendar-mark {
+  width: 1.12rem;
+  height: 1.12rem;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.google-calendar-mark i:nth-child(1) {
+  background: #4285f4;
+}
+
+.google-calendar-mark i:nth-child(2) {
+  background: #34a853;
+}
+
+.google-calendar-mark i:nth-child(3) {
+  background: #fbbc05;
+}
+
+.google-calendar-mark i:nth-child(4) {
+  background: #ea4335;
+}
+
+.calendar-booking-main {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+}
+
+.calendar-booking-main svg {
+  flex: none;
+  color: #1d4ed8;
+  margin-top: 0.1rem;
+}
+
+.calendar-booking-main strong {
+  display: block;
+  color: #111827;
+  font-size: 1.1rem;
+}
+
+.calendar-booking-main p {
+  color: #475467;
+  font-weight: 850;
+  margin-top: 0.2rem;
+}
+
+.calendar-booking-details {
+  display: grid;
+  gap: 0.42rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 0.75rem;
+}
+
+.calendar-booking-details div {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #344054;
+  font-weight: 750;
+  line-height: 1.32;
+}
+
+.calendar-booking-details svg {
+  flex: none;
+  color: #667085;
+}
+
+.owner-next-action {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.55rem;
+  align-items: center;
+  border: 1px solid #b7e4c7;
+  border-radius: 8px;
+  background: #ecfdf3;
+  padding: 0.75rem;
+  margin-top: 0.8rem;
+}
+
+.owner-next-action svg {
+  grid-row: span 2;
+  color: #087443;
+}
+
+.owner-next-action strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: #111827;
+  font-size: 0.96rem;
+  line-height: 1.24;
+}
+
+.owner-message-placeholder {
+  min-height: 24rem;
+}
+
+.owner-message-placeholder strong {
+  color: #111827;
+  font-size: 1.15rem;
+}
+
+@media (max-width: 1100px) {
+  .assistant-demo-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .owner-message-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .assistant-demo-section {
+    padding: 3rem 1rem;
+  }
+
+  .assistant-demo-heading h2 {
+    font-size: 2rem;
+  }
+
+  .assistant-demo-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .owner-message-card {
+    grid-column: auto;
+  }
+
+  .phone-surface {
+    min-height: 31rem;
+  }
+}
+
 /* Features */
 .features {
   padding: 5rem 1rem;
