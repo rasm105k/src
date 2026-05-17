@@ -32,6 +32,70 @@ public static class DocumentEndpoints
             return Results.Ok(result);
         });
 
+        documentTypes.MapPost("/{id:guid}/fields", async (
+            Guid id,
+            DocumentTypeFieldRequest request,
+            IDocumentRepository repository,
+            CancellationToken cancellationToken) =>
+        {
+            var errors = DocumentRequestValidator.ValidateDocumentTypeField(request);
+            if (errors.Count > 0)
+            {
+                return Validation(errors);
+            }
+
+            var result = await repository.AddDocumentTypeFieldAsync(id, request, cancellationToken);
+            return result.Status switch
+            {
+                DocumentTypeFieldMutationStatus.Success => Results.Created($"/api/document-types/{id}/fields/{request.FieldKey}", result.Field),
+                DocumentTypeFieldMutationStatus.DocumentTypeNotFound => Results.NotFound(new { message = $"Document type {id} was not found." }),
+                DocumentTypeFieldMutationStatus.FieldAlreadyExists => Results.Conflict(new { message = $"Field '{request.FieldKey}' already exists on document type {id}.", field = result.Field }),
+                _ => Results.Problem("Unable to add document type field.")
+            };
+        });
+
+        documentTypes.MapPatch("/{id:guid}/fields/{fieldKey}", async (
+            Guid id,
+            string fieldKey,
+            UpdateDocumentTypeFieldRequest request,
+            IDocumentRepository repository,
+            CancellationToken cancellationToken) =>
+        {
+            var errors = DocumentRequestValidator.ValidateUpdateDocumentTypeField(request);
+            if (errors.Count > 0)
+            {
+                return Validation(errors);
+            }
+
+            var result = await repository.UpdateDocumentTypeFieldAsync(id, fieldKey, request, cancellationToken);
+            return FieldMutationResult(id, fieldKey, result);
+        });
+
+        documentTypes.MapDelete("/{id:guid}/fields/{fieldKey}", async (
+            Guid id,
+            string fieldKey,
+            IDocumentRepository repository,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await repository.DeleteDocumentTypeFieldAsync(id, fieldKey, cancellationToken);
+            return result.Status switch
+            {
+                DocumentTypeFieldMutationStatus.Success => Results.NoContent(),
+                _ => FieldMutationResult(id, fieldKey, result)
+            };
+        });
+
+        documentTypes.MapGet("/{id:guid}/view-model", async (
+            Guid id,
+            IDocumentRepository repository,
+            CancellationToken cancellationToken) =>
+        {
+            var documentType = await repository.GetDocumentTypeAsync(id, cancellationToken);
+            return documentType is null
+                ? Results.NotFound()
+                : Results.Ok(DocumentViewModelMapper.ToTemplateViewModel(documentType));
+        });
+
         var reports = app.MapGroup("/api/reports").WithTags("Reports");
 
         reports.MapPost("/", async (
@@ -89,6 +153,23 @@ public static class DocumentEndpoints
             return report is null ? Results.NotFound() : Results.Ok(report);
         });
 
+        reports.MapGet("/{id:guid}/view-model", async (
+            Guid id,
+            IDocumentRepository repository,
+            CancellationToken cancellationToken) =>
+        {
+            var report = await repository.GetReportAsync(id, cancellationToken);
+            if (report is null)
+            {
+                return Results.NotFound();
+            }
+
+            var documentType = await repository.GetDocumentTypeAsync(report.DocumentTypeId, cancellationToken);
+            return documentType is null
+                ? Results.Problem($"Document type {report.DocumentTypeId} was not found for report {report.Id}.")
+                : Results.Ok(DocumentViewModelMapper.ToReportViewModel(documentType, report));
+        });
+
         reports.MapPatch("/{id:guid}", async (
             Guid id,
             UpdateReportRequest request,
@@ -144,4 +225,14 @@ public static class DocumentEndpoints
         Results.ValidationProblem(errors
             .GroupBy(error => error.Field)
             .ToDictionary(group => group.Key, group => group.Select(error => error.Message).ToArray()));
+
+    private static IResult FieldMutationResult(Guid documentTypeId, string fieldKey, DocumentTypeFieldMutationResult result) =>
+        result.Status switch
+        {
+            DocumentTypeFieldMutationStatus.Success => Results.Ok(result.Field),
+            DocumentTypeFieldMutationStatus.DocumentTypeNotFound => Results.NotFound(new { message = $"Document type {documentTypeId} was not found." }),
+            DocumentTypeFieldMutationStatus.FieldNotFound => Results.NotFound(new { message = $"Field '{fieldKey}' was not found on document type {documentTypeId}." }),
+            DocumentTypeFieldMutationStatus.FieldAlreadyExists => Results.Conflict(new { message = $"Field '{fieldKey}' already exists on document type {documentTypeId}.", field = result.Field }),
+            _ => Results.Problem("Unable to mutate document type field.")
+        };
 }

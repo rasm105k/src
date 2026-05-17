@@ -3,11 +3,14 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY DocumentApi.csproj ./
-RUN dotnet restore ./DocumentApi.csproj
+COPY WorkslipApi.csproj ./
+COPY DocumentApi.Domain/DocumentApi.Domain.csproj ./DocumentApi.Domain/
+COPY DocumentApi.Application/DocumentApi.Application.csproj ./DocumentApi.Application/
+COPY DocumentApi.Infrastructure/DocumentApi.Infrastructure.csproj ./DocumentApi.Infrastructure/
+RUN dotnet restore ./WorkslipApi.csproj
 
 COPY . ./
-RUN dotnet publish ./DocumentApi.csproj \
+RUN dotnet publish ./WorkslipApi.csproj \
     --configuration Release \
     --output /app/publish \
     /p:UseAppHost=false
@@ -19,4 +22,4 @@ ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 
 COPY --from=build /app/publish ./
-ENTRYPOINT ["dotnet", "DocumentApi.dll"]
+ENTRYPOINT ["dotnet", "WorkslipApi.dll"]

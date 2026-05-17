@@ -1,15 +1,11 @@
-using DocumentApi.Data;
 using DocumentApi.Documents;
-using DocumentApi.Migrations;
+using DocumentApi.Infrastructure;
 using DocumentApi.Workslips;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
-builder.Services.AddSingleton<ISqlConnectionFactory, SqlConnectionFactory>();
-builder.Services.AddScoped<IDocumentRepository, DapperDocumentRepository>();
-builder.Services.AddScoped<IWorkslipRepository, DapperWorkslipRepository>();
-builder.Services.AddScoped<SqlMigrationRunner>();
+builder.Services.AddDocumentApiInfrastructure();
 
 var app = builder.Build();
 

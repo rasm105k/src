@@ -1,5 +1,7 @@
 @DocumentApi_HostAddress = http://localhost:5262
 @ReportId = 00000000-0000-0000-0000-000000000000
+@DocumentTypeId = 00000000-0000-0000-0000-000000000000
+@FieldKey = postman.extra_note
 
 GET {{DocumentApi_HostAddress}}/health
 Accept: application/json
@@ -46,6 +48,48 @@ Accept: application/json
 ###
 
 GET {{DocumentApi_HostAddress}}/api/workslips/{{ReportId}}
+Accept: application/json
+
+###
+
+GET {{DocumentApi_HostAddress}}/api/document-types/{{DocumentTypeId}}/view-model
+Accept: application/json
+
+###
+
+POST {{DocumentApi_HostAddress}}/api/document-types/{{DocumentTypeId}}/fields
+Content-Type: application/json
+
+{
+  "fieldKey": "{{FieldKey}}",
+  "label": "Ekstra note",
+  "dataType": "Text",
+  "isRequired": false,
+  "sortOrder": 900,
+  "options": null
+}
+
+###
+
+PATCH {{DocumentApi_HostAddress}}/api/document-types/{{DocumentTypeId}}/fields/{{FieldKey}}
+Content-Type: application/json
+
+{
+  "label": "Ekstra note til kontor",
+  "dataType": "Text",
+  "isRequired": false,
+  "sortOrder": 905,
+  "options": null
+}
+
+###
+
+DELETE {{DocumentApi_HostAddress}}/api/document-types/{{DocumentTypeId}}/fields/{{FieldKey}}
+Accept: application/json
+
+###
+
+GET {{DocumentApi_HostAddress}}/api/reports/{{ReportId}}/view-model
 Accept: application/json
 
 ###

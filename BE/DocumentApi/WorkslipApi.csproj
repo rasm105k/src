@@ -7,15 +7,34 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Dapper" Version="2.1.72" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.1" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="Migrations\*.sql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="DocumentApi.Application\DocumentApi.Application.csproj" />
+    <ProjectReference Include="DocumentApi.Domain\DocumentApi.Domain.csproj" />
+    <ProjectReference Include="DocumentApi.Infrastructure\DocumentApi.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="DocumentApi.Application\**\*.cs" />
+    <Compile Remove="DocumentApi.Domain\**\*.cs" />
+    <Compile Remove="DocumentApi.Infrastructure\**\*.cs" />
+    <Compile Remove="DocumentApi.Tests\**\*.cs" />
+    <Content Remove="DocumentApi.Application\**\*" />
+    <Content Remove="DocumentApi.Domain\**\*" />
+    <Content Remove="DocumentApi.Infrastructure\**\*" />
+    <Content Remove="DocumentApi.Tests\**\*" />
+    <None Remove="DocumentApi.Application\**\*" />
+    <None Remove="DocumentApi.Domain\**\*" />
+    <None Remove="DocumentApi.Infrastructure\**\*" />
+    <None Remove="DocumentApi.Tests\**\*" />
   </ItemGroup>
 
 </Project>

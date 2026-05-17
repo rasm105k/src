@@ -18,9 +18,36 @@ public static class DocumentRequestValidator
 
         foreach (var field in request.Fields)
         {
-            Required(field.FieldKey, "fields.fieldKey", errors);
-            Required(field.Label, "fields.label", errors);
-            MustBeOneOf(field.DataType, FieldDataTypes.All, "fields.dataType", errors);
+            ValidateDocumentTypeField(field, errors, "fields");
+        }
+
+        return errors;
+    }
+
+    public static IReadOnlyList<DocumentValidationError> ValidateDocumentTypeField(DocumentTypeFieldRequest request)
+    {
+        var errors = new List<DocumentValidationError>();
+        ValidateDocumentTypeField(request, errors, "field");
+        return errors;
+    }
+
+    public static IReadOnlyList<DocumentValidationError> ValidateUpdateDocumentTypeField(UpdateDocumentTypeFieldRequest request)
+    {
+        var errors = new List<DocumentValidationError>();
+
+        if (request.Label is not null)
+        {
+            Required(request.Label, "field.label", errors);
+        }
+
+        if (request.DataType is not null)
+        {
+            MustBeOneOf(request.DataType, FieldDataTypes.All, "field.dataType", errors);
+        }
+
+        if (request.SortOrder is < 0)
+        {
+            errors.Add(new("field.sortOrder", "Sort order must be 0 or greater."));
         }
 
         return errors;
@@ -109,6 +136,18 @@ public static class DocumentRequestValidator
         if (file.FileSizeBytes < 0)
         {
             errors.Add(new("files.fileSizeBytes", "File size must be 0 or greater."));
+        }
+    }
+
+    private static void ValidateDocumentTypeField(DocumentTypeFieldRequest field, List<DocumentValidationError> errors, string prefix)
+    {
+        Required(field.FieldKey, $"{prefix}.fieldKey", errors);
+        Required(field.Label, $"{prefix}.label", errors);
+        MustBeOneOf(field.DataType, FieldDataTypes.All, $"{prefix}.dataType", errors);
+
+        if (field.SortOrder < 0)
+        {
+            errors.Add(new($"{prefix}.sortOrder", "Sort order must be 0 or greater."));
         }
     }
 

@@ -91,6 +91,151 @@ public sealed class DapperDocumentRepository(ISqlConnectionFactory connectionFac
         return result;
     }
 
+    public async Task<DocumentTypeResponse?> GetDocumentTypeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        return await GetDocumentTypeAsync(connection, id, cancellationToken);
+    }
+
+    public async Task<DocumentTypeFieldMutationResult> AddDocumentTypeFieldAsync(Guid documentTypeId, DocumentTypeFieldRequest request, CancellationToken cancellationToken)
+    {
+        using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        using var transaction = connection.BeginTransaction();
+
+        if (!await DocumentTypeExistsAsync(connection, transaction, documentTypeId, cancellationToken))
+        {
+            return new(DocumentTypeFieldMutationStatus.DocumentTypeNotFound, null);
+        }
+
+        var existing = await GetDocumentTypeFieldAsync(connection, transaction, documentTypeId, request.FieldKey, cancellationToken);
+        if (existing is not null)
+        {
+            return new(DocumentTypeFieldMutationStatus.FieldAlreadyExists, ToDocumentTypeFieldResponse(existing));
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var id = Guid.NewGuid();
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            insert into dbo.DocumentTypeFields (
+                Id, DocumentTypeId, FieldKey, Label, DataType, IsRequired, SortOrder, OptionsJson, CreatedAt, UpdatedAt
+            )
+            values (
+                @Id, @DocumentTypeId, @FieldKey, @Label, @DataType, @IsRequired, @SortOrder, @OptionsJson, @CreatedAt, @UpdatedAt
+            );
+
+            update dbo.DocumentTypes
+            set UpdatedAt = @UpdatedAt
+            where Id = @DocumentTypeId;
+            """,
+            new
+            {
+                Id = id,
+                DocumentTypeId = documentTypeId,
+                request.FieldKey,
+                request.Label,
+                request.DataType,
+                request.IsRequired,
+                request.SortOrder,
+                OptionsJson = request.Options?.ToJsonString(JsonOptions),
+                CreatedAt = now,
+                UpdatedAt = now
+            },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        var created = await GetDocumentTypeFieldAsync(connection, transaction, documentTypeId, request.FieldKey, cancellationToken);
+        transaction.Commit();
+        return new(DocumentTypeFieldMutationStatus.Success, created is null ? null : ToDocumentTypeFieldResponse(created));
+    }
+
+    public async Task<DocumentTypeFieldMutationResult> UpdateDocumentTypeFieldAsync(Guid documentTypeId, string fieldKey, UpdateDocumentTypeFieldRequest request, CancellationToken cancellationToken)
+    {
+        using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        using var transaction = connection.BeginTransaction();
+
+        if (!await DocumentTypeExistsAsync(connection, transaction, documentTypeId, cancellationToken))
+        {
+            return new(DocumentTypeFieldMutationStatus.DocumentTypeNotFound, null);
+        }
+
+        var existing = await GetDocumentTypeFieldAsync(connection, transaction, documentTypeId, fieldKey, cancellationToken);
+        if (existing is null)
+        {
+            return new(DocumentTypeFieldMutationStatus.FieldNotFound, null);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            update dbo.DocumentTypeFields
+            set Label = coalesce(@Label, Label),
+                DataType = coalesce(@DataType, DataType),
+                IsRequired = coalesce(@IsRequired, IsRequired),
+                SortOrder = coalesce(@SortOrder, SortOrder),
+                OptionsJson = coalesce(@OptionsJson, OptionsJson),
+                UpdatedAt = @UpdatedAt
+            where DocumentTypeId = @DocumentTypeId
+              and FieldKey = @FieldKey;
+
+            update dbo.DocumentTypes
+            set UpdatedAt = @UpdatedAt
+            where Id = @DocumentTypeId;
+            """,
+            new
+            {
+                DocumentTypeId = documentTypeId,
+                FieldKey = fieldKey,
+                request.Label,
+                request.DataType,
+                request.IsRequired,
+                request.SortOrder,
+                OptionsJson = request.Options?.ToJsonString(JsonOptions),
+                UpdatedAt = now
+            },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        var updated = await GetDocumentTypeFieldAsync(connection, transaction, documentTypeId, fieldKey, cancellationToken);
+        transaction.Commit();
+        return new(DocumentTypeFieldMutationStatus.Success, updated is null ? null : ToDocumentTypeFieldResponse(updated));
+    }
+
+    public async Task<DocumentTypeFieldMutationResult> DeleteDocumentTypeFieldAsync(Guid documentTypeId, string fieldKey, CancellationToken cancellationToken)
+    {
+        using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        using var transaction = connection.BeginTransaction();
+
+        if (!await DocumentTypeExistsAsync(connection, transaction, documentTypeId, cancellationToken))
+        {
+            return new(DocumentTypeFieldMutationStatus.DocumentTypeNotFound, null);
+        }
+
+        var existing = await GetDocumentTypeFieldAsync(connection, transaction, documentTypeId, fieldKey, cancellationToken);
+        if (existing is null)
+        {
+            return new(DocumentTypeFieldMutationStatus.FieldNotFound, null);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            delete from dbo.DocumentTypeFields
+            where DocumentTypeId = @DocumentTypeId
+              and FieldKey = @FieldKey;
+
+            update dbo.DocumentTypes
+            set UpdatedAt = @UpdatedAt
+            where Id = @DocumentTypeId;
+            """,
+            new { DocumentTypeId = documentTypeId, FieldKey = fieldKey, UpdatedAt = now },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        transaction.Commit();
+        return new(DocumentTypeFieldMutationStatus.Success, ToDocumentTypeFieldResponse(existing));
+    }
+
     public async Task<ReportResponse> CreateReportAsync(CreateReportRequest request, CancellationToken cancellationToken)
     {
         using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
@@ -412,6 +557,30 @@ public sealed class DapperDocumentRepository(ISqlConnectionFactory connectionFac
 
         return row is null ? null : await ToDocumentTypeResponseAsync(connection, row, cancellationToken);
     }
+
+    private static async Task<bool> DocumentTypeExistsAsync(IDbConnection connection, IDbTransaction transaction, Guid id, CancellationToken cancellationToken) =>
+        await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "select count(1) from dbo.DocumentTypes where Id = @Id;",
+            new { Id = id },
+            transaction,
+            cancellationToken: cancellationToken)) > 0;
+
+    private static async Task<DocumentTypeFieldRow?> GetDocumentTypeFieldAsync(
+        IDbConnection connection,
+        IDbTransaction transaction,
+        Guid documentTypeId,
+        string fieldKey,
+        CancellationToken cancellationToken) =>
+        await connection.QuerySingleOrDefaultAsync<DocumentTypeFieldRow>(new CommandDefinition(
+            """
+            select *
+            from dbo.DocumentTypeFields
+            where DocumentTypeId = @DocumentTypeId
+              and FieldKey = @FieldKey;
+            """,
+            new { DocumentTypeId = documentTypeId, FieldKey = fieldKey },
+            transaction,
+            cancellationToken: cancellationToken));
 
     private static async Task<DocumentTypeResponse> ToDocumentTypeResponseAsync(IDbConnection connection, DocumentTypeRow row, CancellationToken cancellationToken)
     {

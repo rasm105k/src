@@ -10,6 +10,25 @@ public sealed record DocumentTypeFieldRequest(
     int SortOrder,
     JsonObject? Options);
 
+public sealed record UpdateDocumentTypeFieldRequest(
+    string? Label,
+    string? DataType,
+    bool? IsRequired,
+    int? SortOrder,
+    JsonObject? Options);
+
+public enum DocumentTypeFieldMutationStatus
+{
+    Success,
+    DocumentTypeNotFound,
+    FieldAlreadyExists,
+    FieldNotFound
+}
+
+public sealed record DocumentTypeFieldMutationResult(
+    DocumentTypeFieldMutationStatus Status,
+    DocumentTypeFieldResponse? Field);
+
 public sealed record DocumentTypeFieldResponse(
     Guid Id,
     string FieldKey,
@@ -38,6 +57,65 @@ public sealed record DocumentTypeResponse(
     IReadOnlyList<DocumentTypeFieldResponse> Fields,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
+
+public sealed record DocumentViewModelResponse(
+    Guid? ReportId,
+    Guid? OrganizationId,
+    Guid DocumentTypeId,
+    string DocumentTypeCode,
+    string DocumentTypeName,
+    int DocumentTypeVersion,
+    Guid? CustomerId,
+    Guid? SiteId,
+    Guid? CaseId,
+    string? ReportNumber,
+    string? Title,
+    string? Status,
+    string? ReviewStatus,
+    decimal? ReviewScore,
+    Guid? OriginalFileId,
+    Guid? GeneratedPdfFileId,
+    IReadOnlyList<DocumentSectionViewModelResponse> Sections,
+    IReadOnlyList<DocumentFileViewModelResponse> Files);
+
+public sealed record DocumentSectionViewModelResponse(
+    string Id,
+    string Title,
+    int Order,
+    IReadOnlyList<DocumentFieldViewModelResponse> Fields);
+
+public sealed record DocumentFieldViewModelResponse(
+    string Key,
+    int InstanceIndex,
+    string Label,
+    string FieldType,
+    bool Required,
+    int Order,
+    JsonObject? Options,
+    DocumentFieldValueViewModelResponse Value,
+    decimal? Confidence,
+    string? Status,
+    string? Source,
+    JsonObject? BoundingRegions);
+
+public sealed record DocumentFieldValueViewModelResponse(
+    string? Raw,
+    string? Normalized,
+    string? Corrected,
+    JsonObject? Json,
+    string? Display);
+
+public sealed record DocumentFileViewModelResponse(
+    Guid Id,
+    string Purpose,
+    string FileName,
+    string ContentType,
+    long FileSizeBytes,
+    string StorageAccountName,
+    string ContainerName,
+    string BlobName,
+    string? BlobVersionId,
+    DateTimeOffset CreatedAt);
 
 public sealed record DocumentFileRequest(
     string Purpose,
