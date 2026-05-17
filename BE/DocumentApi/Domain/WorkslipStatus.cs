@@ -1,4 +1,4 @@
-namespace WorkslipApi.Domain;
+namespace DocumentApi.Domain;
 
 public enum WorkslipStatus
 {

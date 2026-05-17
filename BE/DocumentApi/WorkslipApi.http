@@ -1,12 +1,12 @@
-@WorkslipApi_HostAddress = http://localhost:5262
+@DocumentApi_HostAddress = http://localhost:5262
 @ReportId = 00000000-0000-0000-0000-000000000000
 
-GET {{WorkslipApi_HostAddress}}/health
+GET {{DocumentApi_HostAddress}}/health
 Accept: application/json
 
 ###
 
-POST {{WorkslipApi_HostAddress}}/api/workslips
+POST {{DocumentApi_HostAddress}}/api/workslips
 Content-Type: application/json
 
 {
@@ -40,17 +40,17 @@ Content-Type: application/json
 
 ###
 
-GET {{WorkslipApi_HostAddress}}/api/workslips?limit=25&offset=0
+GET {{DocumentApi_HostAddress}}/api/workslips?limit=25&offset=0
 Accept: application/json
 
 ###
 
-GET {{WorkslipApi_HostAddress}}/api/workslips/{{ReportId}}
+GET {{DocumentApi_HostAddress}}/api/workslips/{{ReportId}}
 Accept: application/json
 
 ###
 
-PATCH {{WorkslipApi_HostAddress}}/api/workslips/{{ReportId}}
+PATCH {{DocumentApi_HostAddress}}/api/workslips/{{ReportId}}
 Content-Type: application/json
 
 {
@@ -60,15 +60,15 @@ Content-Type: application/json
 
 ###
 
-POST {{WorkslipApi_HostAddress}}/api/workslips/{{ReportId}}/submit
+POST {{DocumentApi_HostAddress}}/api/workslips/{{ReportId}}/submit
 Accept: application/json
 
 ###
 
-POST {{WorkslipApi_HostAddress}}/api/workslips/{{ReportId}}/approve
+POST {{DocumentApi_HostAddress}}/api/workslips/{{ReportId}}/approve
 Accept: application/json
 
 ###
 
-POST {{WorkslipApi_HostAddress}}/api/workslips/{{ReportId}}/reject
+POST {{DocumentApi_HostAddress}}/api/workslips/{{ReportId}}/reject
 Accept: application/json

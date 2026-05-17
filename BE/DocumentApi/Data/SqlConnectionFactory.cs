@@ -1,7 +1,7 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
 
-namespace WorkslipApi.Data;
+namespace DocumentApi.Data;
 
 public interface ISqlConnectionFactory
 {

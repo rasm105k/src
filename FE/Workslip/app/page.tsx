@@ -2,6 +2,8 @@
 
 import {
   ArrowLeft,
+  BriefcaseBusiness,
+  CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
@@ -10,7 +12,8 @@ import {
   ShieldCheck,
   Smartphone,
   UserCheck,
-  Wrench
+  Wrench,
+  Plus
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -29,6 +32,17 @@ import {
   type InstallationType,
   type WorkKind
 } from "../lib/4v05-schema";
+import {
+  buildDraftFromCase,
+  createBlankDraft,
+  demoCases,
+  getDraftProgress,
+  getNextReportNumber,
+  initialCaseControlValues,
+  type WorkslipCase,
+  type WorkslipCaseStatus,
+  type WorkslipDraft
+} from "../lib/demo-cases";
 
 type StepId =
   | "report"
@@ -49,16 +63,14 @@ const nextLabels: Record<StepId, string> = {
   done: "Færdig"
 };
 
-const initialControlValues = Object.fromEntries(
-  controlStages.flatMap((stage) =>
-    Object.values(stage.items)
-      .flat()
-      .filter(Boolean)
-      .map((item) => [item.id, false])
-  )
-);
+const initialControlValues = initialCaseControlValues;
 
 export default function Home() {
+  const [cases, setCases] = useState<WorkslipCase[]>(demoCases);
+  const [draftsByCaseId, setDraftsByCaseId] = useState<Record<string, WorkslipDraft>>(() =>
+    Object.fromEntries(demoCases.map((item) => [item.caseId, buildDraftFromCase(item)]))
+  );
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<StepId>("report");
   const [selectedInstallations, setSelectedInstallations] = useState<InstallationType[]>([]);
   const [workKind, setWorkKind] = useState<WorkKind | null>(null);
@@ -90,10 +102,114 @@ export default function Home() {
     assurance: "Godkendt med Face ID"
   };
 
+  const selectedCase = cases.find((item) => item.caseId === selectedCaseId) ?? null;
+
+  function createDraftFromCurrentForm(nextStep: StepId = currentStep): WorkslipDraft {
+    return {
+      currentStep: nextStep,
+      customerName,
+      address,
+      contactPerson,
+      phone,
+      date,
+      reportNumber,
+      description,
+      customerNotes,
+      selectedInstallations: [...selectedInstallations],
+      workKind,
+      customWorkKind,
+      controlValues: { ...controlValues },
+      selectedControlStages: [...selectedControlStages],
+      expandedControlStages: [...expandedControlStages],
+      closure: [...closure]
+    };
+  }
+
+  function applyDraft(draft: WorkslipDraft) {
+    setCurrentStep(draft.currentStep);
+    setCustomerName(draft.customerName);
+    setAddress(draft.address);
+    setContactPerson(draft.contactPerson);
+    setPhone(draft.phone);
+    setDate(draft.date);
+    setReportNumber(draft.reportNumber);
+    setDescription(draft.description);
+    setCustomerNotes(draft.customerNotes);
+    setSelectedInstallations([...draft.selectedInstallations]);
+    setWorkKind(draft.workKind);
+    setCustomWorkKind(draft.customWorkKind);
+    setControlValues({ ...initialControlValues, ...draft.controlValues });
+    setSelectedControlStages([...draft.selectedControlStages]);
+    setExpandedControlStages([...draft.expandedControlStages]);
+    setClosure([...draft.closure]);
+    setCategoryErrors([]);
+    setControlStepError("");
+    setClosureError("");
+    setShowDescriptionError(false);
+    setShowInlineConfirm(false);
+  }
+
+  function persistCurrentDraft(nextStep: StepId = currentStep) {
+    if (!selectedCaseId) return;
+
+    const nextDraft = createDraftFromCurrentForm(nextStep);
+    setDraftsByCaseId((current) => ({
+      ...current,
+      [selectedCaseId]: nextDraft
+    }));
+    setCases((current) =>
+      current.map((item) =>
+        item.caseId === selectedCaseId && item.status === "open"
+          ? { ...item, status: "draft" }
+          : item
+      )
+    );
+  }
+
+  function loadDraftIntoForm(caseId: string) {
+    const workslipCase = cases.find((item) => item.caseId === caseId);
+    if (!workslipCase) return;
+
+    const draft = draftsByCaseId[caseId] ?? buildDraftFromCase(workslipCase);
+    setSelectedCaseId(caseId);
+    applyDraft(draft);
+  }
+
+  function createNewCase() {
+    const reportNumber = getNextReportNumber(cases);
+    const today = new Date().toISOString().slice(0, 10);
+    const nextCaseNumber = `SAG-${1001 + cases.length}`;
+    const newCase: WorkslipCase = {
+      caseId: `case-new-${Date.now()}`,
+      caseNumber: nextCaseNumber,
+      customerName: "",
+      address: "",
+      contactPerson: "",
+      phone: "",
+      taskDescription: "",
+      scheduledDate: today,
+      priority: "normal",
+      status: "draft",
+      reportNumber
+    };
+    const draft = createBlankDraft({ reportNumber, scheduledDate: today });
+
+    setCases((current) => [newCase, ...current]);
+    setDraftsByCaseId((current) => ({ ...current, [newCase.caseId]: draft }));
+    setSelectedCaseId(newCase.caseId);
+    applyDraft(draft);
+  }
+
+  function returnToCaseList(nextStep: StepId = currentStep) {
+    persistCurrentDraft(nextStep);
+    setSelectedCaseId(null);
+    setShowInlineConfirm(false);
+  }
+
   const currentIndex = stepOrder.indexOf(currentStep);
   const stepCount = stepOrder.length - 1;
-  const stepText = currentStep === "done" ? "Færdig" : `Trin ${currentIndex + 1} af ${stepCount}`;
-  const progress = currentStep === "done" ? 100 : Math.max(8, (currentIndex / stepCount) * 100);
+  const stepText = selectedCaseId === null ? "Sagsliste" : currentStep === "done" ? "Færdig" : `Trin ${currentIndex + 1} af ${stepCount}`;
+  const progress = selectedCaseId === null ? 0 : currentStep === "done" ? 100 : Math.max(8, (currentIndex / stepCount) * 100);
 
   const activeControlColumnIds = useMemo(
     () => getControlColumnsForInstallations(selectedInstallations),
@@ -124,6 +240,8 @@ export default function Home() {
   );
 
   function goNext() {
+    if (!selectedCaseId) return;
+
     if (currentStep === "report" && description.trim().length === 0) {
       setShowDescriptionError(true);
       return;
@@ -169,15 +287,26 @@ export default function Home() {
     }
 
     if (currentStep === "done") {
-      setCurrentStep("report");
+      returnToCaseList("done");
       return;
     }
 
-    setCurrentStep(stepOrder[Math.min(currentIndex + 1, stepOrder.length - 1)]);
+    const nextStep = stepOrder[Math.min(currentIndex + 1, stepOrder.length - 1)];
+    persistCurrentDraft(nextStep);
+    setCurrentStep(nextStep);
   }
 
   function goBack() {
-    setCurrentStep(stepOrder[Math.max(currentIndex - 1, 0)]);
+    if (!selectedCaseId) return;
+
+    if (currentStep === "report") {
+      returnToCaseList("report");
+      return;
+    }
+
+    const previousStep = stepOrder[Math.max(currentIndex - 1, 0)];
+    persistCurrentDraft(previousStep);
+    setCurrentStep(previousStep);
   }
 
   function toggleInstallation(id: InstallationType) {
@@ -233,7 +362,7 @@ export default function Home() {
   );
 
   const primaryLabel =
-    currentStep === "signature" ? "Send" : currentStep === "done" ? "Ny rapport" : "Fortsæt";
+    currentStep === "signature" ? "Send" : currentStep === "done" ? "Til sagsliste" : "Fortsæt";
 
   return (
     <main className="app-shell">
@@ -245,7 +374,7 @@ export default function Home() {
               type="button"
               aria-label="Gå tilbage"
               onClick={goBack}
-              disabled={currentStep === "report" || currentStep === "done"}
+              disabled={selectedCaseId === null || currentStep === "done"}
             >
               <ArrowLeft size={21} strokeWidth={2.4} />
             </button>
@@ -253,14 +382,23 @@ export default function Home() {
               <span>{stepText}</span>
             </div>
           </div>
-          <div className="doc-title">4V05-arbejdsrapport</div>
+          <div className="doc-title">{selectedCase ? `${selectedCase.caseNumber} · 4V05-arbejdsrapport` : "Dagens sager"}</div>
           <div className="progress" aria-hidden="true">
             <span style={{ width: `${progress}%` }} />
           </div>
         </header>
 
         <div className="screen">
-          {currentStep === "report" && (
+          {selectedCaseId === null && (
+            <CaseListScreen
+              cases={cases}
+              draftsByCaseId={draftsByCaseId}
+              onOpenCase={loadDraftIntoForm}
+              onCreateCase={createNewCase}
+            />
+          )}
+
+          {selectedCaseId !== null && currentStep === "report" && (
             <StepFrame
               title="4V05 arbejdsrapport"
             >
@@ -321,7 +459,7 @@ export default function Home() {
             </StepFrame>
           )}
 
-          {currentStep === "categories" && (
+          {selectedCaseId !== null && currentStep === "categories" && (
             <StepFrame
               title="Kategorier"
               lead="Vælg anlægstype og arbejdstype."
@@ -395,7 +533,7 @@ export default function Home() {
             </StepFrame>
           )}
 
-          {currentStep === "controls" && (
+          {selectedCaseId !== null && currentStep === "controls" && (
             <StepFrame
               title="Kontrol"
               lead="Kontrolpunkterne er foldet ind fra start. Åbn en kategori og sæt flueben ved det, du har kontrolleret."
@@ -425,7 +563,7 @@ export default function Home() {
             </StepFrame>
           )}
 
-          {currentStep === "closure" && (
+          {selectedCaseId !== null && currentStep === "closure" && (
             <StepFrame
               title="Afslutning af sag"
               lead="Marker sagens status. 'Ikke færdig' kan ikke kombineres med 'færdig' eller 'klar til faktura'."
@@ -446,7 +584,7 @@ export default function Home() {
             </StepFrame>
           )}
 
-          {currentStep === "signature" && (
+          {selectedCaseId !== null && currentStep === "signature" && (
             <StepFrame
               title="Digital attestering"
               lead="Gennemgå rapporten og bekræft med den bruger, der er logget ind. Attesteringen gemmes med navn, rolle, tidspunkt og rapportens kontrolpunkter."
@@ -578,7 +716,7 @@ export default function Home() {
             </StepFrame>
           )}
 
-          {currentStep === "done" && (
+          {selectedCaseId !== null && currentStep === "done" && (
             <StepFrame
               title="Rapport sendt"
               lead="4V05 arbejdsrapporten er udfyldt, digitalt attesteret af montør og klar til kontorets gennemgang."
@@ -674,6 +812,19 @@ export default function Home() {
         </div>
 
         <footer className="bottom-bar">
+          {selectedCaseId === null ? (
+            <div className="case-list-footer">
+              <div>
+                <span>Sagskø</span>
+                <strong>{cases.length} sager i demoen</strong>
+              </div>
+              <button type="button" onClick={createNewCase}>
+                <Plus size={18} />
+                Opret sag
+              </button>
+            </div>
+          ) : (
+            <>
           {currentStep === "categories" && categoryErrors.length > 0 && (
             <div className="bottom-error">
               {categoryErrors.map((error) => (
@@ -694,6 +845,17 @@ export default function Home() {
                   className="inline-confirm-btn primary"
                   onClick={() => {
                     setShowInlineConfirm(false);
+                    if (selectedCaseId) {
+                      setCases((current) =>
+                        current.map((item) =>
+                          item.caseId === selectedCaseId ? { ...item, status: "submitted" } : item
+                        )
+                      );
+                      setDraftsByCaseId((current) => ({
+                        ...current,
+                        [selectedCaseId]: createDraftFromCurrentForm("done")
+                      }));
+                    }
                     setCurrentStep("done");
                   }}
                 >
@@ -712,6 +874,8 @@ export default function Home() {
                 {currentStep !== "done" && <ChevronRight size={18} />}
               </button>
             </div>
+          )}
+            </>
           )}
         </footer>
       </section>
@@ -735,6 +899,108 @@ export default function Home() {
       </aside>
     </main>
   );
+}
+
+function CaseListScreen({
+  cases,
+  draftsByCaseId,
+  onOpenCase,
+  onCreateCase
+}: {
+  cases: WorkslipCase[];
+  draftsByCaseId: Record<string, WorkslipDraft>;
+  onOpenCase: (caseId: string) => void;
+  onCreateCase: () => void;
+}) {
+  const openCases = cases.filter((item) => item.status !== "submitted").length;
+
+  return (
+    <div className="case-list-screen">
+      <div className="case-list-hero">
+        <div className="case-list-icon">
+          <BriefcaseBusiness size={22} strokeWidth={2.6} />
+        </div>
+        <div>
+          <h1>Sager</h1>
+          <p className="lead">{openCases} åbne sager. Vælg en sag, eller opret en ny 4V05-rapport.</p>
+        </div>
+      </div>
+
+      <div className="case-list">
+        {cases.map((item) => (
+          <CaseCard
+            key={item.caseId}
+            item={item}
+            draft={draftsByCaseId[item.caseId]}
+            onOpen={() => onOpenCase(item.caseId)}
+          />
+        ))}
+      </div>
+
+      <button className="create-case-inline" type="button" onClick={onCreateCase}>
+        <Plus size={18} strokeWidth={2.7} />
+        Opret sag
+      </button>
+    </div>
+  );
+}
+
+function CaseCard({
+  item,
+  draft,
+  onOpen
+}: {
+  item: WorkslipCase;
+  draft?: WorkslipDraft;
+  onOpen: () => void;
+}) {
+  const progress = draft ? getDraftProgress(draft) : null;
+  const description = draft?.description || item.taskDescription || "Ingen opgavebeskrivelse endnu";
+
+  return (
+    <article className={`case-card ${item.priority === "urgent" ? "urgent" : ""}`}>
+      <button type="button" onClick={onOpen} className="case-card-button">
+        <div className="case-card-top">
+          <div>
+            <span className="case-number">{item.caseNumber}</span>
+            <h2>{draft?.customerName || item.customerName || "Ny kunde"}</h2>
+          </div>
+          <CaseStatusPill status={item.status} />
+        </div>
+        <p className="case-address">{draft?.address || item.address || "Adresse mangler"}</p>
+        <p className="case-description">{description}</p>
+        <div className="case-card-meta">
+          <span>
+            <CalendarDays size={14} strokeWidth={2.5} />
+            {formatCaseDate(draft?.date || item.scheduledDate)}
+          </span>
+          {item.priority === "urgent" && <strong>Haster</strong>}
+          {progress && <span>{progress.label} udfyldt</span>}
+        </div>
+        <div className="case-card-action">
+          <span>Åbn sag</span>
+          <ChevronRight size={17} strokeWidth={2.7} />
+        </div>
+      </button>
+    </article>
+  );
+}
+
+function CaseStatusPill({ status }: { status: WorkslipCaseStatus }) {
+  const label: Record<WorkslipCaseStatus, string> = {
+    open: "Åben",
+    draft: "Kladde",
+    submitted: "Indsendt"
+  };
+
+  return <span className={`case-status ${status}`}>{label[status]}</span>;
+}
+
+function formatCaseDate(value: string) {
+  return new Date(value).toLocaleDateString("da-DK", {
+    day: "2-digit",
+    month: "short"
+  });
 }
 
 function StepFrame({

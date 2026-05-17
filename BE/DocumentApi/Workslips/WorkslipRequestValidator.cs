@@ -1,4 +1,4 @@
-namespace WorkslipApi.Workslips;
+namespace DocumentApi.Workslips;
 
 public static class WorkslipRequestValidator
 {

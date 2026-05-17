@@ -10,7 +10,7 @@ import {
   workKinds,
   type ActiveControlColumn,
   type InstallationType
-} from "./4v05-schema";
+} from "./4v05-schema.ts";
 
 describe("4V05 installation categories", () => {
   it("keeps gas and varme as separate installation choices", () => {

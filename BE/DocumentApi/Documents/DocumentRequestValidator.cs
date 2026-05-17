@@ -1,6 +1,6 @@
-using WorkslipApi.Domain;
+using DocumentApi.Domain;
 
-namespace WorkslipApi.Documents;
+namespace DocumentApi.Documents;
 
 public static class DocumentRequestValidator
 {

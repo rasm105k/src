@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
-using WorkslipApi.Domain;
+using DocumentApi.Domain;
 
-namespace WorkslipApi.Workslips;
+namespace DocumentApi.Workslips;
 
 public sealed record ControlCheckRequest(
     string StageId,

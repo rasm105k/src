@@ -1,7 +1,7 @@
 using Dapper;
-using WorkslipApi.Data;
+using DocumentApi.Data;
 
-namespace WorkslipApi.Migrations;
+namespace DocumentApi.Migrations;
 
 public sealed class SqlMigrationRunner(ISqlConnectionFactory connectionFactory, IWebHostEnvironment environment)
 {

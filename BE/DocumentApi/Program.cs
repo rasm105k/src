@@ -1,7 +1,7 @@
-using WorkslipApi.Data;
-using WorkslipApi.Documents;
-using WorkslipApi.Migrations;
-using WorkslipApi.Workslips;
+using DocumentApi.Data;
+using DocumentApi.Documents;
+using DocumentApi.Migrations;
+using DocumentApi.Workslips;
 
 var builder = WebApplication.CreateBuilder(args);
 

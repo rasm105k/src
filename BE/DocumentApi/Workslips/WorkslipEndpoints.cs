@@ -1,6 +1,6 @@
-using WorkslipApi.Domain;
+using DocumentApi.Domain;
 
-namespace WorkslipApi.Workslips;
+namespace DocumentApi.Workslips;
 
 public static class WorkslipEndpoints
 {

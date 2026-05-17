@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace WorkslipApi.Documents;
+namespace DocumentApi.Documents;
 
 public sealed record DocumentTypeFieldRequest(
     string FieldKey,

@@ -2,10 +2,10 @@ using System.Data;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Dapper;
-using WorkslipApi.Domain;
-using WorkslipApi.Workslips;
+using DocumentApi.Domain;
+using DocumentApi.Workslips;
 
-namespace WorkslipApi.Data;
+namespace DocumentApi.Data;
 
 public sealed class DapperWorkslipRepository(ISqlConnectionFactory connectionFactory) : IWorkslipRepository
 {
