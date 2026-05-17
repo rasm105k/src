@@ -16,34 +16,41 @@ app.use(express.static("public"));
 
 app.post("/api/token", async (_req, res) => {
   try {
-    const response = await fetch("https://api.openai.com/v1/realtime/sessions", {
+    const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-realtime-preview",
-        modalities: ["text"],
-        instructions: "Du er en passiv lytter. Transskriber kun samtalen. Svar aldrig.",
-        input_audio_format: "pcm16",
-        input_audio_transcription: { model: "whisper-1" },
-        turn_detection: { type: "server_vad" },
+        expires_after: {
+          anchor: "created_at",
+          seconds: 600,
+        },
+        session: {
+          type: "transcription",
+          audio: {
+            input: {
+              format: "pcm16",
+              transcription: { model: "gpt-realtime-whisper" },
+            },
+          },
+          turn_detection: null,
+        },
       }),
     });
 
     if (!response.ok) {
       const err = await response.text();
-      console.error("OpenAI session error:", response.status, err);
+      console.error("OpenAI token error:", response.status, err);
       res.status(response.status).send(err);
       return;
     }
 
     const data = await response.json();
     res.json({
-      id: data.id,
-      token: data.client_secret.value,
-      expires_at: data.client_secret.expires_at,
+      token: data.value,
+      expires_at: data.expires_at,
     });
   } catch (e: any) {
     console.error("Token error:", e);

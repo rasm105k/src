@@ -15,7 +15,7 @@ echo Starting all FE projects...
 
 start "Website" cmd /k "cd /d %~dp0website && npm run dev -- -p 3004"
 start "Workslip" cmd /k "cd /d %~dp0Workslip && npm run dev -- -p 3005"
-start "Backoffice" cmd /k "cd /d %~dp0Backoffice && npm run dev -- -p 3006"
+start "Backoffice" cmd /k "cd /d %~dp0Backoffice && npm run dev -- -p 3002"
 
 echo.
 echo Waiting for servers to start...
@@ -25,7 +25,7 @@ echo Opening projects in browser...
 
 start "" "http://localhost:3004"
 start "" "http://localhost:3005"
-start "" "http://localhost:3006"
+start "" "http://localhost:3002"
 
 echo.
 echo All started — close each window to stop.

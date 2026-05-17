@@ -191,17 +191,7 @@ async function startListening() {
     pc.addTrack(audioStream.getTracks()[0]);
 
     dc = pc.createDataChannel("oai-events");
-    dc.onopen = () => {
-      dc.send(JSON.stringify({
-        type: "session.update",
-        session: {
-          modalities: ["text"],
-          instructions: "Du er en passiv lytter. Transskriber kun samtalen. Svar aldrig.",
-          input_audio_transcription: { model: "whisper-1" },
-          turn_detection: { type: "server_vad" },
-        },
-      }));
-    };
+    dc.onopen = () => {};
 
     pc.ondatachannel = (e) => {
       const channel = e.channel;
@@ -210,6 +200,9 @@ async function startListening() {
           const event = JSON.parse(msg.data);
           if (event.type === "conversation.item.input_audio_transcription.completed") {
             logTranscript(event.transcript);
+          }
+          if (event.type === "response.created" || event.type === "response.in_progress") {
+            dc.send(JSON.stringify({ type: "response.cancel" }));
           }
         } catch (e) {}
       };
