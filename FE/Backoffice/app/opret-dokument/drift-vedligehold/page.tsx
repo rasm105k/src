@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, FileText, Building2, Phone, ShieldCheck, Plus, X, Loader2 } from 'lucide-react'
-import { Section, Field, escHtml } from '../shared'
+import { Section, Field } from '../shared'
+import { escHtml } from '../../_components/ui'
 
 interface SupplierContact {
   name: string
