@@ -1,8 +1,5 @@
 import { FileText } from 'lucide-react'
-
-export function escHtml(v: unknown): string {
-  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
+import { escHtml } from '../_components/ui'
 
 export function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
   return (

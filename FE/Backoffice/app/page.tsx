@@ -3,65 +3,29 @@
 import { useMemo, useState, useRef } from 'react'
 import {
   Search,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  Clock,
-  CheckCircle2,
   XCircle,
   Eye,
-  Building2,
-  Wrench,
-  ClipboardCheck,
-  Flag,
-  FileSignature,
-  CalendarDays,
-  Phone,
-  User,
-  MapPin,
   FileText,
-  Check,
   Upload,
+  Download,
+  Clock,
   Pencil,
   Save,
   X,
   Loader2,
   UploadCloud,
-  Download,
 } from 'lucide-react'
-import {
-  generateMockWorkslips,
-  generateScannedWorkslip,
-  installationTypeLabels,
-  workKindLabels,
-  closureFlagLabels,
-  controlStageDefs,
-  installationToControlColumns,
-} from '@/lib/mock-data'
+import { generateMockWorkslips, generateScannedWorkslip } from '@/lib/mock-data'
 import { openQControlReport, openCombinedQControlReport } from '@/lib/q-control-report'
-import type { Workslip, WorkslipStatus, InstallationType, ClosureFlag, WorkKind } from '@/lib/types'
-
-const statusConfig: Record<WorkslipStatus, { label: string; color: string }> = {
-  pending:    { label: 'Afventer',  color: 'text-yellow-700 bg-yellow-50 ring-yellow-600/20' },
-  processing: { label: 'Behandler', color: 'text-blue-700 bg-blue-50 ring-blue-600/20' },
-  completed:  { label: 'Færdig',    color: 'text-green-700 bg-green-50 ring-green-600/20' },
-  failed:     { label: 'Fejlet',    color: 'text-red-700 bg-red-50 ring-red-600/20' },
-}
-
-
-const instColors: Record<InstallationType, string> = {
-  gas:  'text-orange-700 bg-orange-50 ring-orange-600/20',
-  vand: 'text-cyan-700 bg-cyan-50 ring-cyan-600/20',
-  aflob:'text-stone-700 bg-stone-50 ring-stone-600/20',
-  varme:'text-rose-700 bg-rose-50 ring-rose-600/20',
-}
+import type { Workslip, WorkslipStatus, InstallationType, ClosureFlag } from '@/lib/types'
+import { installationTypeLabels, workKindLabels, closureFlagLabels } from '@/lib/constants'
+import { StatusBadge, SortIcon, DetailRow, escHtml, statusConfig } from './_components/ui'
+import { EditContent } from './_components/edit-content'
+import { WorkslipDetail } from './_components/workslip-detail'
+import { VersionPanel } from './_components/version-panel'
 
 type SortKey = 'reportNumber' | 'customerName' | 'address' | 'workKind' | 'status' | 'technicianName' | 'submittedAt' | 'reviewScore' | 'reviewStatus'
 type SortDir = 'asc' | 'desc'
-
-const instList: InstallationType[] = ['gas', 'vand', 'aflob', 'varme']
-const workKindList: WorkKind[] = ['nyInstallation', 'aendring', 'reparation', 'serviceAndet']
-const closureFlagList: ClosureFlag[] = ['ikkeFaerdig', 'faerdig', 'tegninger', 'faerdigmelding', 'driftVedligehold', 'klarTilFaktura']
 
 interface VersionEntry {
   version: number
@@ -71,20 +35,6 @@ interface VersionEntry {
 }
 
 const allStatuses: WorkslipStatus[] = ['pending', 'processing', 'completed', 'failed']
-
-function StatusBadge({ status }: { status: WorkslipStatus }) {
-  const cfg = statusConfig[status]
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${cfg.color}`}>
-      {status === 'pending' && <Clock size={12} />}
-      {status === 'processing' && <FileText size={12} />}
-      {status === 'completed' && <CheckCircle2 size={12} />}
-      {status === 'failed' && <XCircle size={12} />}
-      {cfg.label}
-    </span>
-  )
-}
-
 
 function openWrittenReport(workslip: Workslip): void {
   const popup = window.open('', '_blank', 'width=900,height=800')
@@ -210,10 +160,6 @@ function openWrittenReport(workslip: Workslip): void {
   popup.focus()
 }
 
-function escHtml(v: unknown): string {
-  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
-
 function sortValue(workslip: Workslip, key: SortKey): string | number | null {
   if (key === 'reviewScore') return workslip.scanReview?.score ?? -1
   if (key === 'reviewStatus') return workslip.scanReview?.status ?? ''
@@ -239,11 +185,6 @@ export default function BackofficePage() {
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
-  }
-
-  function SortIcon({ column }: { column: SortKey }) {
-    if (sortKey !== column) return <ArrowUpDown size={12} className="text-gray-300" />
-    return sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
   }
 
   const filtered = useMemo(() => {
@@ -282,6 +223,7 @@ export default function BackofficePage() {
     setSelected(w)
     setEditMode(false)
     setEditDraft(null)
+    setShowVersions(false)
   }
 
   function startEdit() {
@@ -480,7 +422,7 @@ export default function BackofficePage() {
                   >
                     <div className="flex items-center gap-1">
                       {col.label}
-                      <SortIcon column={col.key} />
+                      <SortIcon column={col.key} sortKey={sortKey} sortDir={sortDir} />
                     </div>
                   </th>
                 ))}
@@ -546,7 +488,7 @@ export default function BackofficePage() {
       {selected && (
         <div
           className="fixed inset-0 z-50 flex items-start justify-end"
-          onClick={() => setSelected(null)}
+          onClick={() => { setSelected(null); setShowVersions(false) }}
         >
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
           <div
@@ -598,7 +540,7 @@ export default function BackofficePage() {
                       <Pencil size={16} />
                     </button>
                     <button
-          onClick={() => { setSelected(null); setEditMode(false); setEditDraft(null) }}
+          onClick={() => { setSelected(null); setEditMode(false); setEditDraft(null); setShowVersions(false) }}
                       className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                     >
                       <XCircle size={18} />
@@ -725,374 +667,10 @@ export default function BackofficePage() {
 }
 
 
-// ─── Edit content ───────────────────────────────
 
-function EditContent({
-  draft,
-  onChange,
-  onToggleInstallation,
-  onToggleClosure,
-  onToggleControlItem,
-}: {
-  draft: Workslip
-  onChange: (field: keyof Workslip, value: any) => void
-  onToggleInstallation: (type: InstallationType) => void
-  onToggleClosure: (flag: ClosureFlag) => void
-  onToggleControlItem: (stageId: string, item: { id: string; label: string }) => void
-}) {
-  return (
-    <div className="divide-y divide-gray-50">
-      <Section icon={FileText} title="Rapportoplysninger">
-        <EditField label="Kunde">
-          <input value={draft.customerName} onChange={e => onChange('customerName', e.target.value)} className="input" />
-        </EditField>
-        <EditField label="Kontaktperson">
-          <input value={draft.contactPerson} onChange={e => onChange('contactPerson', e.target.value)} className="input" />
-        </EditField>
-        <EditField label="Telefon">
-          <input value={draft.phone} onChange={e => onChange('phone', e.target.value)} className="input" />
-        </EditField>
-        <EditField label="Adresse">
-          <input value={draft.address} onChange={e => onChange('address', e.target.value)} className="input" />
-        </EditField>
-        <EditField label="Dato">
-          <input type="date" value={draft.date} onChange={e => onChange('date', e.target.value)} className="input" />
-        </EditField>
-        <EditField label="Opgavebeskrivelse">
-          <textarea value={draft.description} onChange={e => onChange('description', e.target.value)} className="input min-h-[60px]" rows={2} />
-        </EditField>
-        <EditField label="Oplysninger til kunden">
-          <textarea value={draft.customerInfo} onChange={e => onChange('customerInfo', e.target.value)} className="input min-h-[60px]" rows={2} />
-        </EditField>
-      </Section>
 
-      <Section icon={Wrench} title="Kategorier">
-        <div className="mb-3">
-          <span className="text-xs font-medium text-gray-400">Anlægstype</span>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {instList.map(t => {
-              const active = draft.installationTypes.includes(t)
-              return (
-                <button
-                  key={t}
-                  onClick={() => onToggleInstallation(t)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset transition-colors ${
-                    active ? instColors[t] : 'text-gray-500 bg-gray-50 ring-gray-200 hover:bg-gray-100'
-                  }`}
-                >
-                  {installationTypeLabels[t]}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-        <EditField label="Arbejdstype">
-          <select value={draft.workKind} onChange={e => onChange('workKind', e.target.value)} className="input">
-            {workKindList.map(k => (
-              <option key={k} value={k}>{workKindLabels[k]}</option>
-            ))}
-          </select>
-        </EditField>
-        {draft.workKind === 'serviceAndet' && (
-          <EditField label="Anden opgavetype">
-            <input value={draft.customWorkKind} onChange={e => onChange('customWorkKind', e.target.value)} className="input" />
-          </EditField>
-        )}
-      </Section>
 
-      <Section icon={ClipboardCheck} title="Kontrolpunkter">
-        {draft.controlStages.length === 0 ? (
-          <p className="text-sm text-gray-400">Ingen kontrolpunkter</p>
-        ) : (
-          <div className="space-y-1">
-            {draft.controlStages.map(stage => {
-              const stageDef = controlStageDefs.find(s => s.id === stage.stageId)
-              const activeColumns = [...new Set(draft.installationTypes.map(i => installationToControlColumns[i]))]
-              const stageItems: Array<{ id: string; label: string }> = []
-              for (const col of activeColumns) {
-                const colItems = stageDef?.items[col] ?? []
-                for (const item of colItems) {
-                  stageItems.push(item)
-                }
-              }
-              const total = stageItems.length || stage.totalItems
-              return (
-                <StageCollapse
-                  key={stage.stageId}
-                  stageId={stage.stageId}
-                  title={stage.stageTitle}
-                  checked={stage.checkedItems.length}
-                  total={total}
-                >
-                  {stageItems.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic">Ingen kontrolpunkter for valgte anlægstyper</p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-1">
-                      {stageItems.map(item => {
-                        const checked = stage.checkedItems.some(c => c.id === item.id)
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => onToggleControlItem(stage.stageId, item)}
-                            className={`flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors ${
-                              checked
-                                ? 'bg-gray-900 text-white hover:bg-gray-800'
-                                : 'bg-white text-gray-500 ring-1 ring-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            <Check size={11} className={`shrink-0 ${checked ? 'text-white' : 'text-transparent'}`} />
-                            <span className="truncate">{item.label}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </StageCollapse>
-              )
-            })}
-          </div>
-        )}
-        <EditField label="Bemærkninger">
-          <textarea value={draft.remarks} onChange={e => onChange('remarks', e.target.value)} className="input min-h-[60px]" rows={2} />
-        </EditField>
-      </Section>
 
-      <Section icon={Flag} title="Afslutning">
-        <div className="flex flex-wrap gap-1.5">
-          {closureFlagList.map(flag => {
-            const active = draft.closureFlags.includes(flag)
-            const isConflicting = flag === 'ikkeFaerdig'
-            return (
-              <button
-                key={flag}
-                onClick={() => onToggleClosure(flag)}
-                className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium ring-1 ring-inset transition-colors ${
-                  active
-                    ? 'bg-gray-900 text-white ring-gray-900'
-                    : 'bg-white text-gray-500 ring-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                {active && <Check size={11} />}
-                {closureFlagLabels[flag]}
-              </button>
-            )
-          })}
-        </div>
-      </Section>
 
-    </div>
-  )
-}
 
-// ─── Shared components ─────────────────────────
 
-function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
-  return (
-    <div className="px-6 py-5">
-      <div className="mb-3 flex items-center gap-2">
-        <Icon size={15} className="text-gray-400" />
-        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">{title}</span>
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function DetailRow({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
-  return (
-    <div className="flex items-start gap-2 py-1">
-      <Icon size={14} className="mt-0.5 shrink-0 text-gray-300" />
-      <div className="min-w-0">
-        <span className="text-xs text-gray-400">{label}</span>
-        <p className="truncate text-sm text-gray-700">{value}</p>
-      </div>
-    </div>
-  )
-}
-
-function EditField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="mb-2.5 block">
-      <span className="mb-1 block text-xs font-medium text-gray-400">{label}</span>
-      {children}
-    </label>
-  )
-}
-
-function StageCollapse({ stageId, title, checked, total, children }: { stageId: string; title: string; checked: number; total: number; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="rounded-lg border border-gray-100 bg-gray-50">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className="flex w-full items-center justify-between px-3 py-2 text-sm"
-      >
-        <span className="font-medium text-gray-700">{title}</span>
-        <span className="flex items-center gap-2 text-xs text-gray-400">
-          {checked}/{total}
-          <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-        </span>
-      </button>
-      {open && (
-        <div className="border-t border-gray-100 px-3 py-2">
-          {children}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function WorkslipDetail({ workslip }: { workslip: Workslip }) {
-  const dateLabel = (d: string) => new Date(d).toLocaleDateString('da-DK', { day: '2-digit', month: 'long', year: 'numeric' })
-  return (
-    <div className="divide-y divide-gray-50">
-      <Section icon={Clock} title="Status">
-        <StatusBadge status={workslip.status} />
-      </Section>
-
-      <Section icon={FileText} title="Rapportoplysninger">
-        <DetailRow icon={Building2} label="Kunde" value={workslip.customerName} />
-        <DetailRow icon={User} label="Kontaktperson" value={workslip.contactPerson} />
-        <DetailRow icon={Phone} label="Telefon" value={workslip.phone} />
-        <DetailRow icon={MapPin} label="Adresse" value={workslip.address} />
-        <DetailRow icon={CalendarDays} label="Dato" value={dateLabel(workslip.date)} />
-        <div className="mt-3">
-          <span className="text-xs font-medium text-gray-400">Opgavebeskrivelse</span>
-          <p className="mt-0.5 text-sm text-gray-700">{workslip.description}</p>
-        </div>
-        {workslip.customerInfo && (
-          <div className="mt-2">
-            <span className="text-xs font-medium text-gray-400">Oplysninger til kunden</span>
-            <p className="mt-0.5 text-sm text-gray-700">{workslip.customerInfo}</p>
-          </div>
-        )}
-      </Section>
-
-      <Section icon={Wrench} title="Arbejde">
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {workslip.installationTypes.map(t => (
-            <span key={t} className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${instColors[t]}`}>
-              {installationTypeLabels[t]}
-            </span>
-          ))}
-        </div>
-        <DetailRow icon={ClipboardCheck} label="Type" value={workslip.workKind === 'serviceAndet' ? workslip.customWorkKind : workKindLabels[workslip.workKind]} />
-      </Section>
-
-      <Section icon={ClipboardCheck} title="Kontrolpunkter">
-        {workslip.controlStages.length === 0 ? (
-          <p className="text-sm text-gray-400">Ingen kontrolpunkter</p>
-        ) : (
-          <div className="space-y-1">
-            {workslip.controlStages.map(stage => {
-              const stageDef = controlStageDefs.find(s => s.id === stage.stageId)
-              const activeColumns = [...new Set(workslip.installationTypes.map(i => installationToControlColumns[i]))]
-              const stageItems: Array<{ id: string; label: string }> = []
-              for (const col of activeColumns) {
-                const colItems = stageDef?.items[col] ?? []
-                for (const item of colItems) {
-                  stageItems.push(item)
-                }
-              }
-              return (
-                <StageCollapse
-                  key={stage.stageId}
-                  stageId={stage.stageId}
-                  title={stage.stageTitle}
-                  checked={stage.checkedItems.length}
-                  total={stageItems.length || stage.totalItems}
-                >
-                  {stageItems.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic">Ingen kontrolpunkter for valgte anlægstyper</p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-1">
-                      {stageItems.map(item => {
-                        const checked = stage.checkedItems.some(c => c.id === item.id)
-                        return (
-                          <div key={item.id} className={`flex items-center gap-1.5 text-xs ${checked ? 'text-gray-700' : 'text-gray-400'}`}>
-                            <Check size={11} className={`shrink-0 ${checked ? 'text-green-600' : 'text-gray-300'}`} />
-                            <span className="truncate">{item.label}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </StageCollapse>
-              )
-            })}
-          </div>
-        )}
-      </Section>
-
-      {workslip.remarks && (
-        <Section icon={Flag} title="Bemærkninger">
-          <p className="text-sm text-gray-700">{workslip.remarks}</p>
-        </Section>
-      )}
-
-      <Section icon={Flag} title="Afslutning">
-        <div className="flex flex-wrap gap-1.5">
-          {workslip.closureFlags.map(flag => (
-            <span key={flag} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-              <Check size={11} className="text-gray-500" />
-              {closureFlagLabels[flag]}
-            </span>
-          ))}
-        </div>
-      </Section>
-    </div>
-  )
-}
-
-function VersionPanel({ entries, workslip, onClose }: { entries: VersionEntry[]; workslip: Workslip; onClose: () => void }) {
-  const allVersions = [
-    { version: 0, at: workslip.submittedAt, actor: 'System', changes: [{ field: 'Rapport oprettet', oldValue: '', newValue: '' }] },
-    ...entries,
-  ]
-  return (
-    <div className="divide-y divide-gray-50">
-      <div className="px-6 pt-4">
-        <button onClick={onClose} className="inline-flex items-center gap-1 text-xs text-gray-400 transition-colors hover:text-gray-700">
-          ← Tilbage til rapport
-        </button>
-      </div>
-      <Section icon={Clock} title="Versioner">
-        {allVersions.length === 1 ? (
-          <p className="text-sm text-gray-400">Ingen ændringer endnu</p>
-        ) : (
-          <div className="space-y-4">
-            {[...allVersions].reverse().map(v => (
-              <div key={v.version} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-gray-900">Version {v.version}</span>
-                  <span className="text-xs text-gray-400">{new Date(v.at).toLocaleString('da-DK')}</span>
-                </div>
-                <p className="mb-2 text-xs text-gray-500">{v.actor}</p>
-                {v.changes.length > 0 && (
-                  <div className="space-y-1">
-                    {v.changes.map((c, i) => (
-                      <div key={i} className="rounded bg-white px-2 py-1 text-xs">
-                        <span className="font-medium text-gray-700">{c.field}: </span>
-                        {c.oldValue ? (
-                          <>
-                            <span className="text-red-500 line-through">{c.oldValue}</span>
-                            {' → '}
-                            <span className="text-green-600">{c.newValue}</span>
-                          </>
-                        ) : (
-                          <span className="text-green-600">{c.newValue}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-    </div>
-  )
-}

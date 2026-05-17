@@ -4,20 +4,10 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, FileText, Building2, CalendarDays, Wrench, Flag, FileSignature, Check, Loader2 } from 'lucide-react'
 import { openQControlReport } from '@/lib/q-control-report'
-import { generateSingleWorkslip, installationTypeLabels, workKindLabels, closureFlagLabels } from '@/lib/mock-data'
+import { generateSingleWorkslip } from '@/lib/mock-data'
 import type { Workslip, InstallationType, WorkKind, ClosureFlag } from '@/lib/types'
+import { installationTypeLabels, workKindLabels, closureFlagLabels, instColors, instList, workKindList, closureFlagList } from '@/lib/constants'
 import { Section, Field } from '../shared'
-
-const instList: InstallationType[] = ['gas', 'vand', 'aflob', 'varme']
-const workKindList: WorkKind[] = ['nyInstallation', 'aendring', 'reparation', 'serviceAndet']
-const closureFlagList: ClosureFlag[] = ['ikkeFaerdig', 'faerdig', 'tegninger', 'faerdigmelding', 'driftVedligehold', 'klarTilFaktura']
-
-const INST_COLORS: Record<InstallationType, string> = {
-  gas: 'text-orange-700 bg-orange-50 ring-orange-600/20',
-  vand: 'text-cyan-700 bg-cyan-50 ring-cyan-600/20',
-  aflob: 'text-stone-700 bg-stone-50 ring-stone-600/20',
-  varme: 'text-rose-700 bg-rose-50 ring-rose-600/20',
-}
 
 export default function QControlPage() {
   const [customerName, setCustomerName] = useState('')
@@ -138,7 +128,7 @@ export default function QControlPage() {
                       key={t}
                       onClick={() => toggleInstallation(t)}
                       className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset transition-colors ${
-                        active ? INST_COLORS[t] : 'text-gray-500 bg-gray-50 ring-gray-200 hover:bg-gray-100'
+                        active ? instColors[t] : 'text-gray-500 bg-gray-50 ring-gray-200 hover:bg-gray-100'
                       }`}
                     >
                       {installationTypeLabels[t]}
