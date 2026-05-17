@@ -1,27 +1,27 @@
-import type { InstallationType, WorkKind, ClosureFlag } from './types'
+import type { InstallationType, WorkKind, ClosureFlag } from './shared/domain-types'
 
-export const installationTypeLabels: Record<InstallationType, string> = {
+export const installationTypeLabels: Record<string, string> = {
   gas: 'Gas',
   vand: 'Vand',
   aflob: 'Afløb',
   varme: 'Varme',
 }
 
-export const workKindLabels: Record<WorkKind, string> = {
+export const workKindLabels: Record<string, string> = {
   nyInstallation: 'Ny installation',
   aendring: 'Ændring',
   reparation: 'Reparation',
   serviceAndet: 'Andet',
 }
 
-export const installationToControlColumns: Record<InstallationType, string> = {
+export const installationToControlColumns: Record<string, string> = {
   gas: 'gasVarme',
   varme: 'gasVarme',
   vand: 'vand',
   aflob: 'aflob',
 }
 
-export const closureFlagLabels: Record<ClosureFlag, string> = {
+export const closureFlagLabels: Record<string, string> = {
   ikkeFaerdig: 'Ikke færdig',
   faerdig: 'Færdig',
   tegninger: 'Tegninger',
@@ -30,7 +30,7 @@ export const closureFlagLabels: Record<ClosureFlag, string> = {
   klarTilFaktura: 'Klar til faktura',
 }
 
-export const instColors: Record<InstallationType, string> = {
+export const instColors: Record<string, string> = {
   gas: 'text-orange-700 bg-orange-50 ring-orange-600/20',
   vand: 'text-cyan-700 bg-cyan-50 ring-cyan-600/20',
   aflob: 'text-stone-700 bg-stone-50 ring-stone-600/20',

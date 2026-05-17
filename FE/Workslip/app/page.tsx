@@ -261,7 +261,6 @@ export default function Home() {
 
     if (currentStep === "controls") {
       const errors = getControlStageValidationErrors({
-        selectedStageIds: selectedControlStages,
         checkedItemIds: Object.entries(controlValues)
           .filter(([, checked]) => checked)
           .map(([itemId]) => itemId),

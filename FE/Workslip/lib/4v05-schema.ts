@@ -1,4 +1,5 @@
-export type InstallationType = "gas" | "vand" | "aflob" | "varme";
+import type { InstallationType, WorkKind, ClosureFlag, CheckedItem } from "./shared/domain-types";
+export type { InstallationType, WorkKind, ClosureFlag, CheckedItem as ControlItem } from "./shared/domain-types";
 
 export type ControlColumn = "gasVarme" | "vand" | "aflob" | "bemaerkninger";
 
@@ -8,29 +9,10 @@ export type ControlState = "checked";
 
 export const controlStates: ControlState[] = ["checked"];
 
-export type WorkKind =
-  | "nyInstallation"
-  | "aendring"
-  | "reparation"
-  | "serviceAndet";
-
-export type ClosureFlag =
-  | "ikkeFaerdig"
-  | "faerdig"
-  | "tegninger"
-  | "faerdigmelding"
-  | "driftVedligehold"
-  | "klarTilFaktura";
-
-export type ControlItem = {
-  id: string;
-  label: string;
-};
-
 export type ControlStage = {
   id: string;
   title: string;
-  items: Partial<Record<ActiveControlColumn, ControlItem[]>>;
+  items: Partial<Record<ActiveControlColumn, CheckedItem[]>>;
 };
 
 export const installationTypes: Array<{
@@ -89,31 +71,34 @@ export function getControlColumnsForInstallations(
 }
 
 export function getControlStageValidationErrors({
-  selectedStageIds,
   checkedItemIds,
   activeColumns
 }: {
-  selectedStageIds: string[];
   checkedItemIds: string[];
   activeColumns: ActiveControlColumn[];
 }): Record<string, string> {
   const checkedItems = new Set(checkedItemIds);
-  const relevantCheckedItemIds = activeColumns.flatMap((column) =>
-    controlStages.flatMap((stage) => (stage.items[column] ?? []).map((item) => item.id))
-  );
-  const hasAnyRelevantCheckedSubcategory = relevantCheckedItemIds.some((itemId) => checkedItems.has(itemId));
 
-  if (selectedStageIds.length === 0 && !hasAnyRelevantCheckedSubcategory) {
-    return {
-      _controls: "Du skal vælge mindst et kontrolpunkt for at gå videre"
-    };
+  const missingColumns: string[] = [];
+  for (const column of activeColumns) {
+    const columnItemIds = controlStages.flatMap((stage) =>
+      (stage.items[column] ?? []).map((item) => item.id)
+    );
+    const hasCheckedItem = columnItemIds.some((itemId) => checkedItems.has(itemId));
+    if (!hasCheckedItem) {
+      const label = controlColumns.find((c) => c.id === column)?.label ?? column;
+      missingColumns.push(label.toLowerCase());
+    }
   }
 
-  return hasAnyRelevantCheckedSubcategory
-    ? {}
-    : {
-        _controls: "Du skal vælge mindst et kontrolpunkt for at gå videre"
-      };
+  if (missingColumns.length === 0) return {};
+
+  const missing =
+    missingColumns.length === 1
+      ? missingColumns[0]
+      : missingColumns.slice(0, -1).join(", ") + " og " + missingColumns[missingColumns.length - 1];
+
+  return { _controls: `Vælg mindst ét kontrolpunkt for ${missing}` };
 }
 
 export function getCategoryValidationErrors({
