@@ -10,6 +10,19 @@ import {
   ExtractedField,
   ReviewStatus,
 } from './types'
+import {
+  installationTypeLabels,
+  workKindLabels,
+  installationToControlColumns,
+  closureFlagLabels,
+} from './constants'
+
+export {
+  installationTypeLabels,
+  workKindLabels,
+  installationToControlColumns,
+  closureFlagLabels,
+}
 
 const customers = [
   { name: 'Aarhus Ejendomme ApS', address: 'Trøjborgvej 12, 8200 Aarhus N', contact: 'Mette Jensen', phone: '26 75 09 81' },
@@ -57,36 +70,6 @@ const remarksList = [
 const technicians = ['Rasmus Bak', 'Thomas Mikkelsen', 'Kim Andersen', 'Rasmus Bæk', 'Morten Hjort', 'Lasse Jensen']
 
 const reviewStatuses: ReviewStatus[] = ['needsReview', 'readyForApproval', 'approved', 'rejected']
-
-export const installationTypeLabels: Record<InstallationType, string> = {
-  gas: 'Gas',
-  vand: 'Vand',
-  aflob: 'Afløb',
-  varme: 'Varme',
-}
-
-export const workKindLabels: Record<WorkKind, string> = {
-  nyInstallation: 'Ny installation',
-  aendring: 'Ændring',
-  reparation: 'Reparation',
-  serviceAndet: 'Andet',
-}
-
-export const installationToControlColumns: Record<InstallationType, string> = {
-  gas: 'gasVarme',
-  varme: 'gasVarme',
-  vand: 'vand',
-  aflob: 'aflob',
-}
-
-export const closureFlagLabels: Record<ClosureFlag, string> = {
-  ikkeFaerdig: 'Ikke færdig',
-  faerdig: 'Færdig',
-  tegninger: 'Tegninger',
-  faerdigmelding: 'Færdigmelding',
-  driftVedligehold: 'Drifts- og vedligeholdelsesinstruktioner',
-  klarTilFaktura: 'Klar til faktura',
-}
 
 function randomItem<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]

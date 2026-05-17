@@ -2,18 +2,16 @@
 
 import {
   ArrowLeft,
-  BriefcaseBusiness,
-  CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
   LockKeyhole,
+  Plus,
   ShieldCheck,
   Smartphone,
   UserCheck,
   Wrench,
-  Plus
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -25,10 +23,7 @@ import {
   getControlStageValidationErrors,
   installationTypes,
   workKinds,
-  type ActiveControlColumn,
   type ClosureFlag,
-  type ControlItem,
-  type ControlStage,
   type InstallationType,
   type WorkKind
 } from "../lib/4v05-schema";
@@ -36,13 +31,17 @@ import {
   buildDraftFromCase,
   createBlankDraft,
   demoCases,
-  getDraftProgress,
   getNextReportNumber,
   initialCaseControlValues,
   type WorkslipCase,
-  type WorkslipCaseStatus,
   type WorkslipDraft
 } from "../lib/demo-cases";
+import { CaseListScreen } from "./_components/case-list-screen";
+import { CaseCard, formatCaseDate } from "./_components/case-card";
+import { StepFrame } from "./_components/step-frame";
+import { Field } from "./_components/field";
+import { ControlStageCard } from "./_components/control-stage-card";
+import { SummaryRow } from "./_components/summary-row";
 
 type StepId =
   | "report"
@@ -262,7 +261,6 @@ export default function Home() {
 
     if (currentStep === "controls") {
       const errors = getControlStageValidationErrors({
-        selectedStageIds: selectedControlStages,
         checkedItemIds: Object.entries(controlValues)
           .filter(([, checked]) => checked)
           .map(([itemId]) => itemId),
@@ -382,7 +380,14 @@ export default function Home() {
               <span>{stepText}</span>
             </div>
           </div>
-          <div className="doc-title">{selectedCase ? `${selectedCase.caseNumber} · 4V05-arbejdsrapport` : "Dagens sager"}</div>
+          {selectedCase ? (
+            <button className="doc-title doc-title-button" type="button" aria-label="Til sagsliste" onClick={() => returnToCaseList(currentStep)}>
+              <span>{selectedCase.caseNumber} · Tilbage til liste</span>
+              <span className="doc-title-shortcut">Sager</span>
+            </button>
+          ) : (
+            <div className="doc-title">Dagens sager</div>
+          )}
           <div className="progress" aria-hidden="true">
             <span style={{ width: `${progress}%` }} />
           </div>
@@ -901,239 +906,4 @@ export default function Home() {
   );
 }
 
-function CaseListScreen({
-  cases,
-  draftsByCaseId,
-  onOpenCase,
-  onCreateCase
-}: {
-  cases: WorkslipCase[];
-  draftsByCaseId: Record<string, WorkslipDraft>;
-  onOpenCase: (caseId: string) => void;
-  onCreateCase: () => void;
-}) {
-  const openCases = cases.filter((item) => item.status !== "submitted").length;
 
-  return (
-    <div className="case-list-screen">
-      <div className="case-list-hero">
-        <div className="case-list-icon">
-          <BriefcaseBusiness size={22} strokeWidth={2.6} />
-        </div>
-        <div>
-          <h1>Sager</h1>
-          <p className="lead">{openCases} åbne sager. Vælg en sag, eller opret en ny 4V05-rapport.</p>
-        </div>
-      </div>
-
-      <div className="case-list">
-        {cases.map((item) => (
-          <CaseCard
-            key={item.caseId}
-            item={item}
-            draft={draftsByCaseId[item.caseId]}
-            onOpen={() => onOpenCase(item.caseId)}
-          />
-        ))}
-      </div>
-
-      <button className="create-case-inline" type="button" onClick={onCreateCase}>
-        <Plus size={18} strokeWidth={2.7} />
-        Opret sag
-      </button>
-    </div>
-  );
-}
-
-function CaseCard({
-  item,
-  draft,
-  onOpen
-}: {
-  item: WorkslipCase;
-  draft?: WorkslipDraft;
-  onOpen: () => void;
-}) {
-  const progress = draft ? getDraftProgress(draft) : null;
-  const description = draft?.description || item.taskDescription || "Ingen opgavebeskrivelse endnu";
-
-  return (
-    <article className={`case-card ${item.priority === "urgent" ? "urgent" : ""}`}>
-      <button type="button" onClick={onOpen} className="case-card-button">
-        <div className="case-card-top">
-          <div>
-            <span className="case-number">{item.caseNumber}</span>
-            <h2>{draft?.customerName || item.customerName || "Ny kunde"}</h2>
-          </div>
-          <CaseStatusPill status={item.status} />
-        </div>
-        <p className="case-address">{draft?.address || item.address || "Adresse mangler"}</p>
-        <p className="case-description">{description}</p>
-        <div className="case-card-meta">
-          <span>
-            <CalendarDays size={14} strokeWidth={2.5} />
-            {formatCaseDate(draft?.date || item.scheduledDate)}
-          </span>
-          {item.priority === "urgent" && <strong>Haster</strong>}
-          {progress && <span>{progress.label} udfyldt</span>}
-        </div>
-        <div className="case-card-action">
-          <span>Åbn sag</span>
-          <ChevronRight size={17} strokeWidth={2.7} />
-        </div>
-      </button>
-    </article>
-  );
-}
-
-function CaseStatusPill({ status }: { status: WorkslipCaseStatus }) {
-  const label: Record<WorkslipCaseStatus, string> = {
-    open: "Åben",
-    draft: "Kladde",
-    submitted: "Indsendt"
-  };
-
-  return <span className={`case-status ${status}`}>{label[status]}</span>;
-}
-
-function formatCaseDate(value: string) {
-  return new Date(value).toLocaleDateString("da-DK", {
-    day: "2-digit",
-    month: "short"
-  });
-}
-
-function StepFrame({
-  title,
-  lead,
-  callout,
-  children
-}: {
-  title: string;
-  lead?: string;
-  callout?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <>
-      <h1>{title}</h1>
-      {lead && <p className="lead">{lead}</p>}
-      {callout && (
-        <div className="callout">
-          <span>{callout}</span>
-        </div>
-      )}
-      <div className="form">{children}</div>
-    </>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  error,
-  children
-}: {
-  label: string;
-  hint?: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className={`field ${error ? "error" : ""}`}>
-      <span className="field-label">{label}</span>
-      {hint && <span className="hint">{hint}</span>}
-      {children}
-      {error && <span className="error-text">{error}</span>}
-    </label>
-  );
-}
-
-function ControlStageCard({
-  stage,
-  columns,
-  expanded,
-  selected,
-  values,
-  onToggleStage,
-  onToggleItem
-}: {
-  stage: ControlStage;
-  columns: ActiveControlColumn[];
-  expanded: boolean;
-  selected: boolean;
-  values: Record<string, boolean>;
-  onToggleStage: () => void;
-  onToggleItem: (itemId: string) => void;
-}) {
-  const itemCount = columns.reduce((count, column) => count + (stage.items[column]?.length ?? 0), 0);
-  const checkedCount = columns.reduce(
-    (count, column) => count + (stage.items[column] ?? []).filter((item) => values[item.id]).length,
-    0
-  );
-
-  return (
-    <article className={`control-stage ${expanded ? "expanded" : ""}`}>
-      <button className="control-stage-header" type="button" aria-expanded={expanded} onClick={onToggleStage}>
-        <div>
-          <h2>{stage.title}</h2>
-          <span>
-            {selected ? `${checkedCount} af ${itemCount} markeret` : `${itemCount} underkategorier`}
-          </span>
-        </div>
-        <ChevronDown size={20} strokeWidth={2.5} />
-      </button>
-      {expanded && (
-        <div className="control-columns">
-          {columns.map((column) => {
-            const columnConfig = controlColumns.find((item) => item.id === column);
-            const items = stage.items[column] ?? [];
-            if (items.length === 0) return null;
-
-            return (
-              <section className="control-column" key={`${stage.id}-${column}`}>
-                <h3>{columnConfig?.label}</h3>
-                <div className="control-items">
-                  {items.map((item) => (
-                    <ControlItemRow
-                      key={item.id}
-                      item={item}
-                      checked={values[item.id] ?? false}
-                      onToggle={() => onToggleItem(item.id)}
-                    />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      )}
-    </article>
-  );
-}
-
-function ControlItemRow({
-  item,
-  checked,
-  onToggle
-}: {
-  item: ControlItem;
-  checked: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button className={`control-item ${checked ? "checked" : ""}`} type="button" onClick={onToggle}>
-      <span>{checked && <Check size={16} strokeWidth={3} />}</span>
-      <strong>{item.label}</strong>
-    </button>
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="summary-row">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}

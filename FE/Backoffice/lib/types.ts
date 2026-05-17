@@ -1,8 +1,7 @@
+import type { InstallationType, WorkKind, ClosureFlag, CheckedItem } from './shared/domain-types'
+export type { InstallationType, WorkKind, ClosureFlag, CheckedItem }
+
 export type WorkslipStatus = 'pending' | 'processing' | 'completed' | 'failed'
-
-export type InstallationType = 'gas' | 'vand' | 'aflob' | 'varme'
-
-export type WorkKind = 'nyInstallation' | 'aendring' | 'reparation' | 'serviceAndet'
 
 export type ReviewStatus =
   | 'uploaded'
@@ -15,19 +14,6 @@ export type ReviewStatus =
 export type ExtractedFieldStatus = 'confirmed' | 'needsReview' | 'missing' | 'conflict' | 'corrected'
 
 export type ReviewIssueSeverity = 'low' | 'medium' | 'high'
-
-export type ClosureFlag =
-  | 'ikkeFaerdig'
-  | 'faerdig'
-  | 'tegninger'
-  | 'faerdigmelding'
-  | 'driftVedligehold'
-  | 'klarTilFaktura'
-
-export interface CheckedItem {
-  id: string
-  label: string
-}
 
 export interface ControlStageEntry {
   stageId: string

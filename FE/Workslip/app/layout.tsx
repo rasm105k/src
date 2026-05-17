@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { QueryProvider } from "../lib/shared/query-provider";
 
 export const metadata: Metadata = {
   title: "Workslip - Digitale arbejdssedler",
@@ -27,7 +28,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="da">
-      <body>{children}</body>
+      <body>
+        <QueryProvider>{children}</QueryProvider>
+      </body>
     </html>
   );
 }
