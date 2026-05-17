@@ -1,130 +1,175 @@
 import "dotenv/config";
 import express from "express";
+import http from "http";
+import { WebSocketServer } from "ws";
+import fs from "fs";
 import path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import OpenAI from "openai";
+import ffmpegPath from "ffmpeg-static";
+
+const execFileAsync = promisify(execFile);
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
-const API_KEY = process.env.OPENAI_API_KEY;
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
 
-if (!API_KEY) {
-  console.error("Missing OPENAI_API_KEY in .env");
-  process.exit(1);
+const server = http.createServer(app);
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const PORT = Number(process.env.PORT || 3000);
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL;
+
+if (!PUBLIC_BASE_URL) {
+  throw new Error("Missing PUBLIC_BASE_URL in .env");
 }
 
-app.use(express.json());
-app.use(express.static("public"));
-
-app.post("/api/token", async (_req, res) => {
-  try {
-    const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        expires_after: {
-          anchor: "created_at",
-          seconds: 600,
-        },
-        session: {
-          type: "realtime",
-          instructions: "Du er en passiv lytter. Transskriber kun samtalen. Svar aldrig.",
-          audio: {
-            input: {
-              format: {
-                type: "audio/pcm",
-                rate: 24000
-            },
-              transcription: { model: "whisper-1" }
-            },
-            output: {
-              format: {
-                 type: "audio/pcm",
-                  rate: 24000
-              },
-              voice: "alloy",
-            },
-          },
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.error("OpenAI token error:", response.status, err);
-      res.status(response.status).send(err);
-      return;
-    }
-
-    const data = await response.json();
-    res.json({
-      token: data.value,
-      expires_at: data.expires_at,
-    });
-  } catch (e: any) {
-    console.error("Token error:", e);
-    res.status(500).send(e.message);
-  }
+app.get("/", (_req, res) => {
+  res.send("Server is running");
 });
 
-app.post("/api/summarize", async (req, res) => {
-  try {
-    const { transcript } = req.body;
-    if (!transcript || transcript.trim().length === 0) {
-      res.status(400).json({ error: "Missing or empty transcript" });
-      return;
+const recordingsDir = path.join(process.cwd(), "recordings");
+fs.mkdirSync(recordingsDir, { recursive: true });
+
+app.post("/twilio/voice", (req, res) => {
+  const wsUrl = PUBLIC_BASE_URL.replace("https://", "wss://").replace("http://", "ws://");
+
+  res.type("text/xml");
+  res.send(`
+<Response>
+  <Say language="da-DK">Opkaldet forbindes nu.</Say>
+  <Connect>
+    <Stream url="${wsUrl}/call-stream" />
+  </Connect>
+</Response>
+`);
+});
+
+const wss = new WebSocketServer({ server, path: "/call-stream" });
+
+wss.on("connection", (ws) => {
+  const callId = Date.now().toString();
+  const ulawPath = path.join(recordingsDir, `${callId}.ulaw`);
+  const wavPath = path.join(recordingsDir, `${callId}.wav`);
+
+  const writeStream = fs.createWriteStream(ulawPath);
+
+  console.log("Call stream connected:", callId);
+
+  ws.on("message", async (message) => {
+    const data = JSON.parse(message.toString());
+
+    if (data.event === "start") {
+      console.log("Twilio stream started:", data.start?.callSid);
     }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "user",
-            content: `Du er en assistent for en dansk håndværkervirksomhed. Lav et kort resume af denne kundesamtale.
+    if (data.event === "media") {
+      const audioBuffer = Buffer.from(data.media.payload, "base64");
+      writeStream.write(audioBuffer);
+    }
+
+    if (data.event === "stop") {
+      console.log("Twilio stream stopped");
+      writeStream.end();
+
+      writeStream.on("finish", async () => {
+        try {
+          await convertUlawToWav(ulawPath, wavPath);
+          const transcript = await transcribe(wavPath);
+          const summary = await summarize(transcript);
+
+          console.log("\n--- TRANSCRIPT ---");
+          console.log(transcript);
+
+          console.log("\n--- SUMMARY ---");
+          console.log(JSON.stringify(summary, null, 2));
+        } catch (err) {
+          console.error("Processing failed:", err);
+        }
+      });
+    }
+  });
+
+  ws.on("close", () => {
+    console.log("WebSocket closed:", callId);
+    writeStream.end();
+  });
+});
+
+async function convertUlawToWav(inputPath: string, outputPath: string) {
+  await execFileAsync(ffmpegPath!, [
+    "-y",
+    "-f",
+    "mulaw",
+    "-ar",
+    "8000",
+    "-ac",
+    "1",
+    "-i",
+    inputPath,
+    outputPath,
+  ]);
+}
+
+async function transcribe(wavPath: string): Promise<string> {
+  const result = await openai.audio.transcriptions.create({
+    model: "gpt-4o-mini-transcribe",
+    file: fs.createReadStream(wavPath),
+    language: "da",
+  });
+
+  return result.text;
+}
+
+async function summarize(transcript: string) {
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "user",
+        content: `
+Du er administrativ assistent for en dansk håndværkervirksomhed.
+
+Analyser denne telefonsamtale og returnér KUN valid JSON.
+
+Felter:
+{
+  "summary": "kort resume",
+  "customerName": "kundens navn eller null",
+  "phone": "telefonnummer eller null",
+  "address": "adresse eller null",
+  "problem": "kort beskrivelse af problemet",
+  "urgent": true/false,
+  "tasks": ["opgaver"],
+  "calendarSuggestions": [
+    {
+      "title": "",
+      "date": "",
+      "time": "",
+      "location": ""
+    }
+  ],
+  "unclearItems": ["ting der er uklare"]
+}
+
+Regler:
+- Opfind ikke information
+- Brug null hvis noget ikke nævnes
+- Marker usikkerheder i unclearItems
 
 Transskription:
 ${transcript}
+        `.trim(),
+      },
+    ],
+  });
 
-Svar præcist i dette JSON-format uden anden tekst:
-{
-  "name": "kundens navn (find det i samtalen)",
-  "phone": "telefonnummer hvis nævnt, ellers null",
-  "problem": "kort beskrivelse af problemet (1-2 sætninger)",
-  "urgent": true/false,
-  "wantsCallback": true/false,
-  "address": "adresse hvis nævnt, ellers null",
-  "agreedNextSteps": "hvad blev der aftalt?",
-  "unclearItems": "hvad er uklart?"
-}`,
-          },
-        ],
-        response_format: { type: "json_object" },
-      }),
-    });
+  const content = response.choices[0].message.content || "{}";
+  return JSON.parse(content);
+}
 
-    if (!response.ok) {
-      const err = await response.text();
-      console.error("OpenAI summary error:", response.status, err);
-      res.status(response.status).send(err);
-      return;
-    }
-
-    const data = await response.json();
-    const summary = JSON.parse(data.choices[0].message.content);
-    res.json(summary);
-  } catch (e: any) {
-    console.error("Summary error:", e);
-    res.status(500).send(e.message);
-  }
-});
-
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
