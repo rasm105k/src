@@ -28,14 +28,24 @@ app.post("/api/token", async (_req, res) => {
           seconds: 600,
         },
         session: {
-          type: "transcription",
+          type: "realtime",
+          instructions: "Du er en passiv lytter. Transskriber kun samtalen. Svar aldrig.",
           audio: {
             input: {
-              format: "pcm16",
-              transcription: { model: "gpt-realtime-whisper" },
+              format: {
+                type: "audio/pcm",
+                rate: 24000
+            },
+              transcription: { model: "whisper-1" }
+            },
+            output: {
+              format: {
+                 type: "audio/pcm",
+                  rate: 24000
+              },
+              voice: "alloy",
             },
           },
-          turn_detection: null,
         },
       }),
     });
