@@ -92,7 +92,7 @@ public sealed class DapperWorkslipRepository(ISqlConnectionFactory connectionFac
             ParseStatus(row.Status),
             row.CustomerName,
             row.CustomerAddress,
-            row.ReportDate,
+            ToDateOnly(row.ReportDate),
             FromJsonList(row.InstallationTypesJson),
             row.WorkKind,
             row.CustomWorkKind,
@@ -310,7 +310,7 @@ public sealed class DapperWorkslipRepository(ISqlConnectionFactory connectionFac
             row.CustomerAddress,
             row.ContactPerson,
             row.Phone,
-            row.ReportDate,
+            ToDateOnly(row.ReportDate),
             row.TaskDescription,
             row.CustomerObservations,
             FromJsonList(row.InstallationTypesJson),
@@ -334,6 +334,9 @@ public sealed class DapperWorkslipRepository(ISqlConnectionFactory connectionFac
 
     private static WorkslipStatus ParseStatus(string status) => Enum.Parse<WorkslipStatus>(status, ignoreCase: true);
 
+    private static DateOnly? ToDateOnly(DateTime? value) =>
+        value is null ? null : DateOnly.FromDateTime(value.Value);
+
     private static string ToJson<T>(T value) => JsonSerializer.Serialize(value, JsonOptions);
 
     private static JsonObject ToJsonNode<T>(T value) =>
@@ -354,7 +357,7 @@ public sealed class DapperWorkslipRepository(ISqlConnectionFactory connectionFac
         public string CustomerAddress { get; init; } = "";
         public string? ContactPerson { get; init; }
         public string? Phone { get; init; }
-        public DateOnly? ReportDate { get; init; }
+        public DateTime? ReportDate { get; init; }
         public string TaskDescription { get; init; } = "";
         public string? CustomerObservations { get; init; }
         public string InstallationTypesJson { get; init; } = "[]";

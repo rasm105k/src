@@ -1,6 +1,11 @@
 # Workslip API
 
-.NET API draft for storing, editing and reviewing 4V05 Workslip reports.
+.NET API draft for storing, editing and reviewing scanned/digital reports.
+
+The API now has two tracks:
+
+- legacy/specific 4V05 workslip endpoints under `/api/workslips`
+- generic document/report endpoints under `/api/document-types` and `/api/reports`
 
 ## Stack
 
@@ -13,6 +18,20 @@
 ## Endpoints
 
 - `GET /health`
+
+### Generic documents
+
+- `POST /api/document-types`
+- `GET /api/document-types`
+- `POST /api/reports`
+- `GET /api/reports`
+- `GET /api/reports/{id}`
+- `PATCH /api/reports/{id}`
+- `POST /api/reports/{id}/files`
+- `PUT /api/reports/{id}/fields`
+
+### 4V05 workslips
+
 - `POST /api/workslips`
 - `GET /api/workslips`
 - `GET /api/workslips/{id}`
@@ -40,4 +59,19 @@ Do not commit real connection strings or secrets.
 
 Initial schema is in `Migrations/001_init_workslip.sql`.
 
+Generic document/report schema is in `Migrations/002_generic_documents.sql`.
+
 The draft includes `SqlMigrationRunner`, but migrations are not automatically executed on startup yet. Keep migration execution explicit until deployment workflow is settled.
+
+## Generic document model
+
+The generic model is intentionally not locked to 4V05:
+
+- `DocumentTypes` describes report/form type and version.
+- `DocumentTypeFields` describes expected fields for a type.
+- `Reports` stores report metadata, status, review status and scores.
+- `DocumentFiles` links reports to Azure Blob files by storage account, container, blob name and optional blob version.
+- `ReportFields` stores dynamic extracted/corrected fields with confidence, status and source.
+- `ProcessingRuns`, `ReviewIssues`, `Approvals` and `AuditEvents` support OCR/AI processing, human review and auditability.
+
+Use `WorkslipControlChecks` only for 4V05-specific control check structure. Future report types should start as `DocumentTypes` + `ReportFields` and only get special tables if the workflow becomes query-heavy or domain-specific.
