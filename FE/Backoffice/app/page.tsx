@@ -28,9 +28,6 @@ import {
   Loader2,
   UploadCloud,
   Download,
-  AlertTriangle,
-  ShieldCheck,
-  FileSearch,
 } from 'lucide-react'
 import {
   generateMockWorkslips,
@@ -42,7 +39,7 @@ import {
   installationToControlColumns,
 } from '@/lib/mock-data'
 import { openQControlReport, openCombinedQControlReport } from '@/lib/q-control-report'
-import type { Workslip, WorkslipStatus, InstallationType, ClosureFlag, WorkKind, ReviewStatus, ScanReview, ExtractedFieldStatus } from '@/lib/types'
+import type { Workslip, WorkslipStatus, InstallationType, ClosureFlag, WorkKind } from '@/lib/types'
 
 const statusConfig: Record<WorkslipStatus, { label: string; color: string }> = {
   pending:    { label: 'Afventer',  color: 'text-yellow-700 bg-yellow-50 ring-yellow-600/20' },
@@ -51,14 +48,6 @@ const statusConfig: Record<WorkslipStatus, { label: string; color: string }> = {
   failed:     { label: 'Fejlet',    color: 'text-red-700 bg-red-50 ring-red-600/20' },
 }
 
-const reviewStatusConfig: Record<ReviewStatus, { label: string; color: string }> = {
-  uploaded:         { label: 'Uploadet',             color: 'text-slate-700 bg-slate-50 ring-slate-600/20' },
-  processing:       { label: 'AI behandler',         color: 'text-blue-700 bg-blue-50 ring-blue-600/20' },
-  needsReview:      { label: 'Kræver gennemgang',    color: 'text-amber-700 bg-amber-50 ring-amber-600/20' },
-  readyForApproval: { label: 'Klar til godkendelse', color: 'text-emerald-700 bg-emerald-50 ring-emerald-600/20' },
-  approved:         { label: 'Godkendt',             color: 'text-green-700 bg-green-50 ring-green-600/20' },
-  rejected:         { label: 'Afvist',               color: 'text-red-700 bg-red-50 ring-red-600/20' },
-}
 
 const instColors: Record<InstallationType, string> = {
   gas:  'text-orange-700 bg-orange-50 ring-orange-600/20',
@@ -69,14 +58,19 @@ const instColors: Record<InstallationType, string> = {
 
 type SortKey = 'reportNumber' | 'customerName' | 'address' | 'workKind' | 'status' | 'technicianName' | 'submittedAt' | 'reviewScore' | 'reviewStatus'
 type SortDir = 'asc' | 'desc'
-type QueueMode = 'all' | 'scanned'
 
 const instList: InstallationType[] = ['gas', 'vand', 'aflob', 'varme']
 const workKindList: WorkKind[] = ['nyInstallation', 'aendring', 'reparation', 'serviceAndet']
 const closureFlagList: ClosureFlag[] = ['ikkeFaerdig', 'faerdig', 'tegninger', 'faerdigmelding', 'driftVedligehold', 'klarTilFaktura']
 
+interface VersionEntry {
+  version: number
+  at: string
+  actor: string
+  changes: { field: string; oldValue: string; newValue: string }[]
+}
+
 const allStatuses: WorkslipStatus[] = ['pending', 'processing', 'completed', 'failed']
-const allReviewStatuses: ReviewStatus[] = ['needsReview', 'readyForApproval', 'approved', 'rejected']
 
 function StatusBadge({ status }: { status: WorkslipStatus }) {
   const cfg = statusConfig[status]
@@ -91,32 +85,6 @@ function StatusBadge({ status }: { status: WorkslipStatus }) {
   )
 }
 
-function ReviewStatusBadge({ status }: { status: ReviewStatus }) {
-  const cfg = reviewStatusConfig[status]
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${cfg.color}`}>
-      {(status === 'needsReview' || status === 'rejected') && <AlertTriangle size={12} />}
-      {status === 'readyForApproval' && <ShieldCheck size={12} />}
-      {status === 'approved' && <CheckCircle2 size={12} />}
-      {(status === 'uploaded' || status === 'processing') && <FileSearch size={12} />}
-      {cfg.label}
-    </span>
-  )
-}
-
-function ReviewScore({ review }: { review?: ScanReview }) {
-  if (!review) return <span className="text-xs text-gray-300">-</span>
-  const color = review.score >= 85
-    ? 'text-green-700 bg-green-50 ring-green-600/20'
-    : review.score >= 70
-      ? 'text-amber-700 bg-amber-50 ring-amber-600/20'
-      : 'text-red-700 bg-red-50 ring-red-600/20'
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${color}`}>
-      {review.score}%
-    </span>
-  )
-}
 
 function openWrittenReport(workslip: Workslip): void {
   const popup = window.open('', '_blank', 'width=900,height=800')
@@ -256,13 +224,14 @@ export default function BackofficePage() {
   const [workslips, setWorkslips] = useState(() => generateMockWorkslips(150))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<WorkslipStatus | 'all'>('all')
-  const [queueMode, setQueueMode] = useState<QueueMode>('scanned')
-  const [reviewFilter, setReviewFilter] = useState<ReviewStatus | 'all'>('all')
+
   const [sortKey, setSortKey] = useState<SortKey>('submittedAt')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [selected, setSelected] = useState<Workslip | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [editDraft, setEditDraft] = useState<Workslip | null>(null)
+  const [versionHistory, setVersionHistory] = useState<Record<string, VersionEntry[]>>({})
+  const [showVersions, setShowVersions] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importFiles, setImportFiles] = useState<File[]>([])
   const [importing, setImporting] = useState(false)
@@ -281,9 +250,7 @@ export default function BackofficePage() {
     const q = search.toLowerCase()
     return workslips
       .filter(w => {
-        if (queueMode === 'scanned' && !w.scanReview) return false
         if (statusFilter !== 'all' && w.status !== statusFilter) return false
-        if (reviewFilter !== 'all' && w.scanReview?.status !== reviewFilter) return false
         if (!q) return true
         return (
           w.customerName.toLowerCase().includes(q) ||
@@ -303,15 +270,11 @@ export default function BackofficePage() {
           : String(aVal ?? '').localeCompare(String(bVal ?? ''))
         return sortDir === 'asc' ? cmp : -cmp
       })
-  }, [queueMode, reviewFilter, search, statusFilter, sortKey, sortDir, workslips])
+  }, [search, statusFilter, sortKey, sortDir, workslips])
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = {
-      all: workslips.length,
-      scanned: workslips.filter(w => w.scanReview).length,
-    }
+    const c: Record<string, number> = { all: workslips.length }
     for (const s of allStatuses) c[s] = workslips.filter(w => w.status === s).length
-    for (const s of allReviewStatuses) c[s] = workslips.filter(w => w.scanReview?.status === s).length
     return c
   }, [workslips])
 
@@ -333,35 +296,29 @@ export default function BackofficePage() {
   }
 
   function saveEdit() {
-    if (!editDraft) return
-    const updated = editDraft.scanReview
-      ? {
-          ...editDraft,
-          scanReview: {
-            ...editDraft.scanReview,
-            status: 'readyForApproval' as ReviewStatus,
-            fields: editDraft.scanReview.fields.map(field =>
-              field.status === 'needsReview' || field.status === 'missing' || field.status === 'conflict'
-                ? { ...field, status: 'corrected' as ExtractedFieldStatus, confidence: Math.max(field.confidence, 92), reason: undefined }
-                : field
-            ),
-            missingCount: 0,
-            uncertainCount: 0,
-            events: [
-              ...editDraft.scanReview.events,
-              {
-                id: `edited-${Date.now()}`,
-                at: new Date().toISOString(),
-                actor: 'Admin',
-                action: 'Rettet',
-                message: 'Udtrukne felter er manuelt rettet og klar til godkendelse.',
-              },
-            ],
-          },
-        }
-      : editDraft
-    setWorkslips(prev => prev.map(w => w.id === updated.id ? updated : w))
-    setSelected(updated)
+    if (!editDraft || !selected) return
+    const changes: VersionEntry['changes'] = []
+    const tracked: (keyof Workslip)[] = ['customerName', 'contactPerson', 'phone', 'address', 'date', 'description', 'customerInfo', 'remarks', 'technicianName', 'signatureDate', 'workKind', 'customWorkKind']
+    for (const field of tracked) {
+      const oldVal = String(selected[field] ?? '')
+      const newVal = String(editDraft[field] ?? '')
+      if (oldVal !== newVal) {
+        changes.push({ field, oldValue: oldVal, newValue: newVal })
+      }
+    }
+    const now = new Date().toISOString()
+    const entry: VersionEntry = {
+      version: (versionHistory[selected.id]?.length ?? 0) + 1,
+      at: now,
+      actor: 'Admin',
+      changes,
+    }
+    setVersionHistory(prev => ({
+      ...prev,
+      [selected.id]: [...(prev[selected.id] ?? []), entry],
+    }))
+    setWorkslips(prev => prev.map(w => w.id === editDraft.id ? editDraft : w))
+    setSelected(editDraft)
     setEditMode(false)
     setEditDraft(null)
   }
@@ -370,11 +327,6 @@ export default function BackofficePage() {
     setEditDraft(prev => prev ? { ...prev, [field]: value } : null)
   }
 
-  function updateReviewDraft(field: keyof Workslip, value: any) {
-    if (!selected) return
-    setEditDraft(prev => ({ ...(prev ?? selected), [field]: value }))
-    setEditMode(true)
-  }
 
   function toggleDraftInstallation(type: InstallationType) {
     setEditDraft(prev => {
@@ -442,67 +394,13 @@ export default function BackofficePage() {
     const newWorkslips = importFiles.map(f => generateScannedWorkslip(f.name))
     setTimeout(() => {
       setWorkslips(prev => [...newWorkslips, ...prev])
-      setQueueMode('scanned')
-      setReviewFilter('all')
       setImportFiles([])
       setImporting(false)
       setShowImport(false)
     }, 1200)
   }
 
-  function updateSelectedWorkslip(next: Workslip) {
-    setWorkslips(prev => prev.map(w => w.id === next.id ? next : w))
-    setSelected(next)
-  }
 
-  function approveSelected() {
-    if (!selected?.scanReview) return
-    const now = new Date().toISOString()
-    updateSelectedWorkslip({
-      ...selected,
-      status: 'completed',
-      processedAt: now,
-      scanReview: {
-        ...selected.scanReview,
-        status: 'approved',
-        score: Math.max(selected.scanReview.score, 90),
-        approvedAt: now,
-        missingCount: 0,
-        uncertainCount: 0,
-        fields: selected.scanReview.fields.map(field => ({
-          ...field,
-          status: field.status === 'missing' || field.status === 'needsReview' || field.status === 'conflict'
-            ? 'corrected'
-            : field.status,
-          confidence: Math.max(field.confidence, 90),
-          reason: undefined,
-        })),
-        events: [
-          ...selected.scanReview.events,
-          { id: `approved-${Date.now()}`, at: now, actor: 'Admin', action: 'Godkendt', message: 'Rapporten er kontrolleret og låst til dokumentation.' },
-        ],
-      },
-    })
-  }
-
-  function rejectSelected() {
-    if (!selected?.scanReview) return
-    const now = new Date().toISOString()
-    updateSelectedWorkslip({
-      ...selected,
-      status: 'failed',
-      processedAt: now,
-      scanReview: {
-        ...selected.scanReview,
-        status: 'rejected',
-        approvedAt: null,
-        events: [
-          ...selected.scanReview.events,
-          { id: `rejected-${Date.now()}`, at: now, actor: 'Admin', action: 'Afvist', message: 'Rapporten er afvist og skal indsendes igen eller korrigeres manuelt.' },
-        ],
-      },
-    })
-  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -511,7 +409,7 @@ export default function BackofficePage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Workslips</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {filtered.length} af {workslips.length} rapporter · {counts.needsReview ?? 0} kræver gennemgang
+            {filtered.length} af {workslips.length} rapporter
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -534,31 +432,7 @@ export default function BackofficePage() {
       </div>
 
       {/* Filters bar */}
-      <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Scannede rapporter" value={counts.scanned ?? 0} tone="neutral" />
-        <MetricCard label="Kræver gennemgang" value={counts.needsReview ?? 0} tone="warning" />
-        <MetricCard label="Klar til godkendelse" value={counts.readyForApproval ?? 0} tone="success" />
-        <MetricCard label="Afvist" value={counts.rejected ?? 0} tone="danger" />
-      </div>
-
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex rounded-lg bg-gray-100 p-1">
-          {([
-            { key: 'scanned', label: 'Review-kø', count: counts.scanned },
-            { key: 'all', label: 'Alle rapporter', count: counts.all },
-          ] as { key: QueueMode; label: string; count: number }[]).map(item => (
-            <button
-              key={item.key}
-              onClick={() => setQueueMode(item.key)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                queueMode === item.key ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {item.label}
-              <span className="ml-1.5 opacity-60">{item.count}</span>
-            </button>
-          ))}
-        </div>
         <div className="flex flex-wrap gap-1.5">
           {(['all', ...allStatuses] as const).map(s => (
             <button
@@ -575,24 +449,6 @@ export default function BackofficePage() {
             </button>
           ))}
         </div>
-        {queueMode === 'scanned' && (
-          <div className="flex flex-wrap gap-1.5">
-            {(['all', ...allReviewStatuses] as const).map(s => (
-              <button
-                key={s}
-                onClick={() => setReviewFilter(s)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                  reviewFilter === s
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                {s === 'all' ? 'Alle reviews' : reviewStatusConfig[s].label}
-                <span className="ml-1.5 opacity-60">{s === 'all' ? counts.scanned : counts[s]}</span>
-              </button>
-            ))}
-          </div>
-        )}
         <div className="relative ml-auto">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -615,14 +471,9 @@ export default function BackofficePage() {
                   { key: 'reportNumber', label: 'Rapport' },
                   { key: 'customerName', label: 'Kunde' },
                   { key: 'address', label: 'Adresse' },
-                  { key: 'workKind', label: 'Type' },
-                  { key: 'reviewScore', label: 'Gennemgang' },
-                  { key: 'reviewStatus', label: 'Review' },
                   { key: 'status', label: 'Status' },
-                  { key: 'technicianName', label: 'Montør' },
                   { key: 'submittedAt', label: 'Indsendt' },
-                ] as { key: SortKey; label: string }[]).map(col => (
-                  <th
+                ] as { key: SortKey; label: string }[]).map(col => (<th
                     key={col.key}
                     onClick={() => toggleSort(col.key)}
                     className="cursor-pointer select-none px-4 py-3 first:pl-6 last:pr-6"
@@ -654,35 +505,7 @@ export default function BackofficePage() {
                     {w.address}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {w.installationTypes.map(t => (
-                        <span
-                          key={t}
-                          className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${instColors[t]}`}
-                        >
-                          {installationTypeLabels[t]}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <ReviewScore review={w.scanReview} />
-                      {w.scanReview && (w.scanReview.missingCount > 0 || w.scanReview.uncertainCount > 0) && (
-                        <span className="text-xs text-gray-400">
-                          {w.scanReview.missingCount} mangler · {w.scanReview.uncertainCount} usikre
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3">
-                    {w.scanReview ? <ReviewStatusBadge status={w.scanReview.status} /> : <span className="text-xs text-gray-300">-</span>}
-                  </td>
-                  <td className="px-4 py-3">
                     <StatusBadge status={w.status} />
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-gray-600">
-                    {w.technicianName}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-500">
                     {new Date(w.submittedAt).toLocaleDateString('da-DK', {
@@ -723,7 +546,7 @@ export default function BackofficePage() {
       {selected && (
         <div
           className="fixed inset-0 z-50 flex items-start justify-end"
-          onClick={() => { if (!editMode) setSelected(null) }}
+          onClick={() => setSelected(null)}
         >
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
           <div
@@ -739,6 +562,17 @@ export default function BackofficePage() {
                 <p className="text-xs text-gray-400">{selected.id}</p>
               </div>
               <div className="flex items-center gap-2">
+                {!editMode && (
+                  <button
+                    onClick={() => setShowVersions(v => !v)}
+                    className={`rounded-md p-1.5 transition-colors ${
+                      showVersions ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                    }`}
+                    title="Vis versioner"
+                  >
+                    <Clock size={16} />
+                  </button>
+                )}
                 {editMode ? (
                   <>
                     <button
@@ -764,7 +598,7 @@ export default function BackofficePage() {
                       <Pencil size={16} />
                     </button>
                     <button
-                      onClick={() => setSelected(null)}
+          onClick={() => { setSelected(null); setEditMode(false); setEditDraft(null) }}
                       className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                     >
                       <XCircle size={18} />
@@ -776,54 +610,26 @@ export default function BackofficePage() {
 
             <div className="flex-1 overflow-y-auto">
               {editMode && editDraft ? (
-                selected.scanReview ? (
-                  <ReviewWorkspace
-                    workslip={editDraft ?? selected}
-                    review={(editDraft?.scanReview ?? selected.scanReview)}
-                    isDirty={editMode}
-                    onFieldChange={updateReviewDraft}
-                    onApprove={approveSelected}
-                    onReject={rejectSelected}
-                  />
-                ) : (
-                  <EditContent
+                <EditContent
                   draft={editDraft}
                   onChange={updateDraft}
                   onToggleInstallation={toggleDraftInstallation}
                   onToggleClosure={toggleDraftClosure}
                   onToggleControlItem={toggleDraftControlItem}
-                  />
-                )
-              ) : selected.scanReview ? (
-                <ReviewWorkspace
+                />
+              ) : showVersions ? (
+                <VersionPanel
+                  entries={versionHistory[selected.id] ?? []}
                   workslip={selected}
-                  review={selected.scanReview}
-                  isDirty={false}
-                  onFieldChange={updateReviewDraft}
-                  onApprove={approveSelected}
-                  onReject={rejectSelected}
+                  onClose={() => setShowVersions(false)}
                 />
               ) : (
-                <ViewContent
-                  selected={selected}
-                  onApprove={approveSelected}
-                  onReject={rejectSelected}
-                  onStartEdit={startEdit}
-                />
+                <WorkslipDetail workslip={selected} />
               )}
             </div>
 
             <div className="border-t border-gray-100 px-6 py-4">
               <div className="flex flex-wrap gap-2">
-                {selected.scanReview && !editMode && selected.scanReview.status !== 'approved' && selected.scanReview.status !== 'rejected' && (
-                  <button
-                    onClick={approveSelected}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-green-800"
-                  >
-                    <ShieldCheck size={16} />
-                    Godkend registrering
-                  </button>
-                )}
                 <button
                   onClick={() => openQControlReport(selected)}
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800"
@@ -918,395 +724,6 @@ export default function BackofficePage() {
   )
 }
 
-// ─── View content ───────────────────────────────
-
-function ViewContent({
-  selected,
-  onApprove,
-  onReject,
-  onStartEdit,
-}: {
-  selected: Workslip
-  onApprove: () => void
-  onReject: () => void
-  onStartEdit: () => void
-}) {
-  return (
-    <div className="divide-y divide-gray-50">
-      <Section icon={Clock} title="Status">
-        <div className="flex items-center gap-2">
-          <StatusBadge status={selected.status} />
-          {selected.status === 'completed' && <span className="text-xs text-green-600">Godkendt</span>}
-          {selected.status === 'failed' && <span className="text-xs text-red-600">Afvist</span>}
-        </div>
-      </Section>
-
-      <Section icon={FileText} title="Rapportoplysninger">
-        <DetailRow icon={Building2} label="Kunde" value={selected.customerName} />
-        <DetailRow icon={User} label="Kontaktperson" value={selected.contactPerson} />
-        <DetailRow icon={Phone} label="Telefon" value={selected.phone} />
-        <DetailRow icon={MapPin} label="Adresse" value={selected.address} />
-        <DetailRow icon={CalendarDays} label="Dato" value={new Date(selected.date).toLocaleDateString('da-DK', { day: '2-digit', month: 'long', year: 'numeric' })} />
-        <div className="mt-3">
-          <span className="text-xs font-medium text-gray-400">Opgavebeskrivelse</span>
-          <p className="mt-0.5 text-sm text-gray-700">{selected.description}</p>
-        </div>
-        {selected.customerInfo && (
-          <div className="mt-2">
-            <span className="text-xs font-medium text-gray-400">Oplysninger til kunden</span>
-            <p className="mt-0.5 text-sm text-gray-700">{selected.customerInfo}</p>
-          </div>
-        )}
-      </Section>
-
-      <Section icon={Wrench} title="Kategorier">
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {selected.installationTypes.map(t => (
-            <span key={t} className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${instColors[t]}`}>
-              {installationTypeLabels[t]}
-            </span>
-          ))}
-        </div>
-        <DetailRow icon={Wrench} label="Arbejdstype" value={selected.workKind === 'serviceAndet' ? selected.customWorkKind : workKindLabels[selected.workKind]} />
-      </Section>
-
-      <Section icon={ClipboardCheck} title="Kontrolpunkter">
-        {selected.controlStages.length === 0 ? (
-          <p className="text-sm text-gray-400">Ingen kontrolpunkter</p>
-        ) : (
-          <div className="space-y-4">
-            {selected.controlStages.map(stage => (
-              <div key={stage.stageId}>
-                <div className="mb-1.5 flex items-center justify-between text-sm">
-                  <span className="font-medium text-gray-700">{stage.stageTitle}</span>
-                  <span className="text-xs text-gray-400">{stage.checkedItems.length}/{stage.totalItems}</span>
-                </div>
-                {stage.checkedItems.length > 0 ? (
-                  <div className="space-y-0.5">
-                    {stage.checkedItems.map(item => (
-                      <div key={item.id} className="flex items-start gap-2 rounded-md bg-gray-50 px-3 py-1.5 text-xs text-gray-600">
-                        <Check size={12} className="mt-0.5 shrink-0 text-green-600" />
-                        <span>{item.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-400 italic">Ingen markeret</p>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        {selected.remarks && (
-          <div className="mt-4">
-            <span className="text-xs font-medium text-gray-400">Bemærkninger</span>
-            <p className="mt-0.5 text-sm text-gray-700">{selected.remarks}</p>
-          </div>
-        )}
-      </Section>
-
-      <Section icon={Flag} title="Afslutning">
-        <div className="flex flex-wrap gap-1.5">
-          {selected.closureFlags.map(flag => (
-            <span key={flag} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-              <Check size={11} className="text-gray-500" />
-              {closureFlagLabels[flag]}
-            </span>
-          ))}
-        </div>
-      </Section>
-
-      <Section icon={FileSignature} title="Underskrift">
-        <DetailRow icon={User} label="Montør" value={selected.technicianName} />
-        <DetailRow icon={CalendarDays} label="Dato" value={new Date(selected.signatureDate).toLocaleDateString('da-DK', { day: '2-digit', month: 'long', year: 'numeric' })} />
-      </Section>
-
-      <Section icon={Clock} title="Tidslinje">
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-green-500" />
-            <div>
-              <span className="text-gray-500">Indsendt: </span>
-              <span className="text-gray-700">
-                {new Date(selected.submittedAt).toLocaleDateString('da-DK', {
-                  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-                })}
-              </span>
-            </div>
-          </div>
-          {selected.processedAt && (
-            <div className="flex items-center gap-2">
-              <div className={`h-2 w-2 rounded-full ${selected.status === 'completed' ? 'bg-green-500' : 'bg-red-500'}`} />
-              <div>
-                <span className="text-gray-500">Behandlet: </span>
-                <span className="text-gray-700">
-                  {new Date(selected.processedAt).toLocaleDateString('da-DK', {
-                    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-                  })}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-      </Section>
-    </div>
-  )
-}
-
-function ReviewWorkspace({
-  workslip,
-  review,
-  isDirty,
-  onFieldChange,
-  onApprove,
-  onReject,
-}: {
-  workslip: Workslip
-  review: ScanReview
-  isDirty: boolean
-  onFieldChange: (field: keyof Workslip, value: any) => void
-  onApprove: () => void
-  onReject: () => void
-}) {
-  const canFinalize = review.status !== 'approved' && review.status !== 'rejected'
-  const criticalFields = ['customerName', 'address', 'description', 'technicianName', 'signatureDate']
-  const visibleScores = review.fields
-    .slice()
-    .sort((a, b) => {
-      const aCritical = criticalFields.includes(a.id) ? 0 : 1
-      const bCritical = criticalFields.includes(b.id) ? 0 : 1
-      return aCritical - bCritical || a.confidence - b.confidence
-    })
-
-  return (
-    <div className="grid h-full min-h-0 gap-0 xl:grid-cols-[minmax(300px,0.9fr)_minmax(260px,0.75fr)_minmax(360px,1fr)]">
-      <div className="min-h-0 border-r border-gray-100 bg-gray-50 p-5">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <FileSearch size={16} className="text-gray-400" />
-              <p className="text-sm font-semibold text-gray-900">Original rapport</p>
-            </div>
-            <p className="mt-1 max-w-[300px] truncate text-xs text-gray-500">{review.originalFileName}</p>
-          </div>
-          <button
-            onClick={() => openQControlReport(workslip)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-          >
-            <FileText size={13} />
-            Åbn PDF
-          </button>
-        </div>
-
-        <div className="mx-auto max-w-sm rounded-lg border border-gray-200 bg-white p-4 shadow-xs">
-          <div className="mb-4 flex items-start justify-between border-b border-gray-200 pb-3">
-            <div>
-              <div className="h-3 w-24 rounded bg-gray-900" />
-              <div className="mt-2 h-2 w-32 rounded bg-gray-200" />
-            </div>
-            <div className="h-8 w-14 rounded border border-gray-300" />
-          </div>
-          <FakeDocumentLine label="Kunde" value={workslip.customerName} />
-          <FakeDocumentLine label="Adresse" value={workslip.address} />
-          <FakeDocumentLine label="Kontakt" value={`${workslip.contactPerson} · ${workslip.phone}`} />
-          <FakeDocumentLine label="Arbejde" value={workslip.description} long />
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {workslip.installationTypes.map(type => (
-              <div key={type} className="flex items-center gap-2 rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-600">
-                <div className="h-3 w-3 rounded-sm border border-gray-500 bg-gray-900" />
-                {installationTypeLabels[type]}
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 h-12 rounded border border-dashed border-gray-300 p-2">
-            <div className="h-2 w-28 rounded bg-gray-300" />
-            <div className="mt-2 h-2 w-20 rounded bg-gray-200" />
-          </div>
-        </div>
-      </div>
-
-      <div className="min-h-0 border-r border-gray-100 bg-white p-5">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-gray-900">AI-scores</p>
-            <p className="mt-1 text-xs text-gray-500">Lav score betyder, at feltet bør kontrolleres mod originalen.</p>
-          </div>
-          <ReviewScore review={review} />
-        </div>
-
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          <div className="rounded-lg border border-gray-200 px-3 py-2">
-            <p className="text-xs text-gray-400">Samlet</p>
-            <p className="text-2xl font-bold tracking-tight text-gray-900">{review.score}%</p>
-          </div>
-          <div className="rounded-lg border border-gray-200 px-3 py-2">
-            <p className="text-xs text-gray-400">Status</p>
-            <div className="mt-1"><ReviewStatusBadge status={review.status} /></div>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          {visibleScores.map(field => (
-            <div key={field.id} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-gray-700">{field.label}</p>
-                <div className="flex items-center gap-2">
-                  <FieldStatusBadge status={field.status} />
-                  <span className="w-9 text-right text-xs font-semibold text-gray-500">{field.confidence}%</span>
-                </div>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-gray-200">
-                <div
-                  className={`h-full rounded-full ${field.confidence >= 85 ? 'bg-green-500' : field.confidence >= 70 ? 'bg-amber-500' : 'bg-red-500'}`}
-                  style={{ width: `${field.confidence}%` }}
-                />
-              </div>
-              {field.reason && <p className="mt-1.5 text-xs text-amber-700">{field.reason}</p>}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="min-h-0 overflow-y-auto bg-white p-5">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-gray-900">Ret digital rapport</p>
-            <p className="mt-1 text-xs text-gray-500">Rettelserne gemmes først, når du trykker Gem i toppen.</p>
-          </div>
-          {isDirty && (
-            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-600/20">
-              Ikke gemt
-            </span>
-          )}
-        </div>
-
-        <div className="space-y-3">
-          <ReviewInput label="Kunde" value={workslip.customerName} onChange={value => onFieldChange('customerName', value)} />
-          <ReviewInput label="Kontaktperson" value={workslip.contactPerson} onChange={value => onFieldChange('contactPerson', value)} />
-          <ReviewInput label="Telefon" value={workslip.phone} onChange={value => onFieldChange('phone', value)} />
-          <ReviewInput label="Adresse" value={workslip.address} onChange={value => onFieldChange('address', value)} />
-          <ReviewInput label="Dato" type="date" value={workslip.date} onChange={value => onFieldChange('date', value)} />
-          <ReviewInput label="Opgavebeskrivelse" value={workslip.description} onChange={value => onFieldChange('description', value)} multiline />
-          <ReviewInput label="Bemærkninger" value={workslip.remarks} onChange={value => onFieldChange('remarks', value)} multiline />
-          <ReviewInput label="Montør" value={workslip.technicianName} onChange={value => onFieldChange('technicianName', value)} />
-          <ReviewInput label="Underskriftsdato" type="date" value={workslip.signatureDate} onChange={value => onFieldChange('signatureDate', value)} />
-        </div>
-
-        <div className="mt-5 rounded-lg bg-gray-50 p-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Anlægstype</p>
-          <div className="flex flex-wrap gap-1.5">
-            {workslip.installationTypes.map(type => (
-              <span key={type} className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${instColors[type]}`}>
-                {installationTypeLabels[type]}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-wrap gap-2">
-          {isDirty ? (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
-              Gem rettelserne i toppen, før rapporten godkendes.
-            </div>
-          ) : canFinalize && (
-            <>
-              <button
-                onClick={onApprove}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-green-800"
-              >
-                <ShieldCheck size={15} />
-                Godkend
-              </button>
-              <button
-                onClick={onReject}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50"
-              >
-                <XCircle size={15} />
-                Afvis
-              </button>
-            </>
-          )}
-        </div>
-
-        <div className="mt-5 rounded-lg bg-gray-50 p-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Seneste hændelser</p>
-          <div className="space-y-2">
-            {review.events.slice(-3).map(event => (
-              <div key={event.id} className="flex gap-2 text-xs">
-                <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-gray-400" />
-                <div>
-                  <p className="font-medium text-gray-700">{event.action} · {event.actor}</p>
-                  <p className="text-gray-500">{event.message}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ReviewInput({
-  label,
-  value,
-  onChange,
-  type = 'text',
-  multiline = false,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  type?: string
-  multiline?: boolean
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-gray-500">{label}</span>
-      {multiline ? (
-        <textarea
-          value={value}
-          onChange={event => onChange(event.target.value)}
-          rows={3}
-          className="input min-h-[78px]"
-        />
-      ) : (
-        <input
-          type={type}
-          value={value}
-          onChange={event => onChange(event.target.value)}
-          className="input"
-        />
-      )}
-    </label>
-  )
-}
-
-function FakeDocumentLine({ label, value, long = false }: { label: string; value: string; long?: boolean }) {
-  return (
-    <div className="mb-3">
-      <div className="mb-1 h-2 w-16 rounded bg-gray-200" />
-      <div className={`rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-700 ${long ? 'min-h-12' : ''}`}>
-        <span className="font-medium text-gray-500">{label}: </span>{value}
-      </div>
-    </div>
-  )
-}
-
-function FieldStatusBadge({ status }: { status: ExtractedFieldStatus }) {
-  const cfg: Record<ExtractedFieldStatus, { label: string; color: string }> = {
-    confirmed:   { label: 'OK',       color: 'text-green-700 bg-green-50 ring-green-600/20' },
-    needsReview: { label: 'Tjek',     color: 'text-amber-700 bg-amber-50 ring-amber-600/20' },
-    missing:     { label: 'Mangler',  color: 'text-red-700 bg-red-50 ring-red-600/20' },
-    conflict:    { label: 'Konflikt', color: 'text-red-700 bg-red-50 ring-red-600/20' },
-    corrected:   { label: 'Rettet',   color: 'text-blue-700 bg-blue-50 ring-blue-600/20' },
-  }
-  return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${cfg[status].color}`}>
-      {cfg[status].label}
-    </span>
-  )
-}
 
 // ─── Edit content ───────────────────────────────
 
@@ -1384,52 +801,58 @@ function EditContent({
       </Section>
 
       <Section icon={ClipboardCheck} title="Kontrolpunkter">
-        {draft.controlStages.map(stage => {
-          const stageDef = controlStageDefs.find(s => s.id === stage.stageId)
-          const activeColumns = [...new Set(draft.installationTypes.map(i => installationToControlColumns[i]))]
-          const stageItems: Array<{ id: string; label: string }> = []
-          for (const col of activeColumns) {
-            const colItems = stageDef?.items[col] ?? []
-            for (const item of colItems) {
-              stageItems.push(item)
-            }
-          }
-
-          return (
-            <div key={stage.stageId} className="mb-3">
-              <div className="mb-1.5 flex items-center justify-between text-sm">
-                <span className="font-medium text-gray-700">{stage.stageTitle}</span>
-                <span className="text-xs text-gray-400">{stage.checkedItems.length}/{stage.totalItems}</span>
-              </div>
-              <div className="space-y-0.5">
-                {stageItems.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">Ingen kontrolpunkter for valgte anlægstyper</p>
-                ) : stageItems.map(item => {
-                  const checked = stage.checkedItems.some(c => c.id === item.id)
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => onToggleControlItem(stage.stageId, item)}
-                      className={`flex w-full items-start gap-2 rounded-md px-3 py-1.5 text-xs transition-colors ${
-                        checked
-                          ? 'bg-gray-900 text-white hover:bg-gray-800'
-                          : 'bg-white text-gray-500 ring-1 ring-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded ${
-                        checked ? 'bg-white/20' : 'bg-gray-100'
-                      }`}>
-                        {checked && <Check size={11} className="text-white" />}
-                      </div>
-                      <span className="text-left">{item.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
+        {draft.controlStages.length === 0 ? (
+          <p className="text-sm text-gray-400">Ingen kontrolpunkter</p>
+        ) : (
+          <div className="space-y-1">
+            {draft.controlStages.map(stage => {
+              const stageDef = controlStageDefs.find(s => s.id === stage.stageId)
+              const activeColumns = [...new Set(draft.installationTypes.map(i => installationToControlColumns[i]))]
+              const stageItems: Array<{ id: string; label: string }> = []
+              for (const col of activeColumns) {
+                const colItems = stageDef?.items[col] ?? []
+                for (const item of colItems) {
+                  stageItems.push(item)
+                }
+              }
+              const total = stageItems.length || stage.totalItems
+              return (
+                <StageCollapse
+                  key={stage.stageId}
+                  stageId={stage.stageId}
+                  title={stage.stageTitle}
+                  checked={stage.checkedItems.length}
+                  total={total}
+                >
+                  {stageItems.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">Ingen kontrolpunkter for valgte anlægstyper</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-1">
+                      {stageItems.map(item => {
+                        const checked = stage.checkedItems.some(c => c.id === item.id)
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => onToggleControlItem(stage.stageId, item)}
+                            className={`flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors ${
+                              checked
+                                ? 'bg-gray-900 text-white hover:bg-gray-800'
+                                : 'bg-white text-gray-500 ring-1 ring-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            <Check size={11} className={`shrink-0 ${checked ? 'text-white' : 'text-transparent'}`} />
+                            <span className="truncate">{item.label}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </StageCollapse>
+              )
+            })}
+          </div>
+        )}
         <EditField label="Bemærkninger">
           <textarea value={draft.remarks} onChange={e => onChange('remarks', e.target.value)} className="input min-h-[60px]" rows={2} />
         </EditField>
@@ -1458,35 +881,11 @@ function EditContent({
         </div>
       </Section>
 
-      <Section icon={FileSignature} title="Underskrift">
-        <EditField label="Montør">
-          <input value={draft.technicianName} onChange={e => onChange('technicianName', e.target.value)} className="input" />
-        </EditField>
-        <EditField label="Dato">
-          <input type="date" value={draft.signatureDate} onChange={e => onChange('signatureDate', e.target.value)} className="input" />
-        </EditField>
-      </Section>
     </div>
   )
 }
 
 // ─── Shared components ─────────────────────────
-
-function MetricCard({ label, value, tone }: { label: string; value: number; tone: 'neutral' | 'warning' | 'success' | 'danger' }) {
-  const tones = {
-    neutral: 'border-gray-200 bg-white text-gray-900',
-    warning: 'border-amber-200 bg-amber-50 text-amber-900',
-    success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-    danger: 'border-red-200 bg-red-50 text-red-900',
-  }
-
-  return (
-    <div className={`rounded-lg border px-4 py-3 ${tones[tone]}`}>
-      <p className="text-xs font-medium opacity-70">{label}</p>
-      <p className="mt-1 text-2xl font-bold tracking-tight">{value}</p>
-    </div>
-  )
-}
 
 function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
   return (
@@ -1518,5 +917,182 @@ function EditField({ label, children }: { label: string; children: React.ReactNo
       <span className="mb-1 block text-xs font-medium text-gray-400">{label}</span>
       {children}
     </label>
+  )
+}
+
+function StageCollapse({ stageId, title, checked, total, children }: { stageId: string; title: string; checked: number; total: number; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="rounded-lg border border-gray-100 bg-gray-50">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="flex w-full items-center justify-between px-3 py-2 text-sm"
+      >
+        <span className="font-medium text-gray-700">{title}</span>
+        <span className="flex items-center gap-2 text-xs text-gray-400">
+          {checked}/{total}
+          <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-gray-100 px-3 py-2">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function WorkslipDetail({ workslip }: { workslip: Workslip }) {
+  const dateLabel = (d: string) => new Date(d).toLocaleDateString('da-DK', { day: '2-digit', month: 'long', year: 'numeric' })
+  return (
+    <div className="divide-y divide-gray-50">
+      <Section icon={Clock} title="Status">
+        <StatusBadge status={workslip.status} />
+      </Section>
+
+      <Section icon={FileText} title="Rapportoplysninger">
+        <DetailRow icon={Building2} label="Kunde" value={workslip.customerName} />
+        <DetailRow icon={User} label="Kontaktperson" value={workslip.contactPerson} />
+        <DetailRow icon={Phone} label="Telefon" value={workslip.phone} />
+        <DetailRow icon={MapPin} label="Adresse" value={workslip.address} />
+        <DetailRow icon={CalendarDays} label="Dato" value={dateLabel(workslip.date)} />
+        <div className="mt-3">
+          <span className="text-xs font-medium text-gray-400">Opgavebeskrivelse</span>
+          <p className="mt-0.5 text-sm text-gray-700">{workslip.description}</p>
+        </div>
+        {workslip.customerInfo && (
+          <div className="mt-2">
+            <span className="text-xs font-medium text-gray-400">Oplysninger til kunden</span>
+            <p className="mt-0.5 text-sm text-gray-700">{workslip.customerInfo}</p>
+          </div>
+        )}
+      </Section>
+
+      <Section icon={Wrench} title="Arbejde">
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {workslip.installationTypes.map(t => (
+            <span key={t} className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${instColors[t]}`}>
+              {installationTypeLabels[t]}
+            </span>
+          ))}
+        </div>
+        <DetailRow icon={ClipboardCheck} label="Type" value={workslip.workKind === 'serviceAndet' ? workslip.customWorkKind : workKindLabels[workslip.workKind]} />
+      </Section>
+
+      <Section icon={ClipboardCheck} title="Kontrolpunkter">
+        {workslip.controlStages.length === 0 ? (
+          <p className="text-sm text-gray-400">Ingen kontrolpunkter</p>
+        ) : (
+          <div className="space-y-1">
+            {workslip.controlStages.map(stage => {
+              const stageDef = controlStageDefs.find(s => s.id === stage.stageId)
+              const activeColumns = [...new Set(workslip.installationTypes.map(i => installationToControlColumns[i]))]
+              const stageItems: Array<{ id: string; label: string }> = []
+              for (const col of activeColumns) {
+                const colItems = stageDef?.items[col] ?? []
+                for (const item of colItems) {
+                  stageItems.push(item)
+                }
+              }
+              return (
+                <StageCollapse
+                  key={stage.stageId}
+                  stageId={stage.stageId}
+                  title={stage.stageTitle}
+                  checked={stage.checkedItems.length}
+                  total={stageItems.length || stage.totalItems}
+                >
+                  {stageItems.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">Ingen kontrolpunkter for valgte anlægstyper</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-1">
+                      {stageItems.map(item => {
+                        const checked = stage.checkedItems.some(c => c.id === item.id)
+                        return (
+                          <div key={item.id} className={`flex items-center gap-1.5 text-xs ${checked ? 'text-gray-700' : 'text-gray-400'}`}>
+                            <Check size={11} className={`shrink-0 ${checked ? 'text-green-600' : 'text-gray-300'}`} />
+                            <span className="truncate">{item.label}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </StageCollapse>
+              )
+            })}
+          </div>
+        )}
+      </Section>
+
+      {workslip.remarks && (
+        <Section icon={Flag} title="Bemærkninger">
+          <p className="text-sm text-gray-700">{workslip.remarks}</p>
+        </Section>
+      )}
+
+      <Section icon={Flag} title="Afslutning">
+        <div className="flex flex-wrap gap-1.5">
+          {workslip.closureFlags.map(flag => (
+            <span key={flag} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+              <Check size={11} className="text-gray-500" />
+              {closureFlagLabels[flag]}
+            </span>
+          ))}
+        </div>
+      </Section>
+    </div>
+  )
+}
+
+function VersionPanel({ entries, workslip, onClose }: { entries: VersionEntry[]; workslip: Workslip; onClose: () => void }) {
+  const allVersions = [
+    { version: 0, at: workslip.submittedAt, actor: 'System', changes: [{ field: 'Rapport oprettet', oldValue: '', newValue: '' }] },
+    ...entries,
+  ]
+  return (
+    <div className="divide-y divide-gray-50">
+      <div className="px-6 pt-4">
+        <button onClick={onClose} className="inline-flex items-center gap-1 text-xs text-gray-400 transition-colors hover:text-gray-700">
+          ← Tilbage til rapport
+        </button>
+      </div>
+      <Section icon={Clock} title="Versioner">
+        {allVersions.length === 1 ? (
+          <p className="text-sm text-gray-400">Ingen ændringer endnu</p>
+        ) : (
+          <div className="space-y-4">
+            {[...allVersions].reverse().map(v => (
+              <div key={v.version} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-900">Version {v.version}</span>
+                  <span className="text-xs text-gray-400">{new Date(v.at).toLocaleString('da-DK')}</span>
+                </div>
+                <p className="mb-2 text-xs text-gray-500">{v.actor}</p>
+                {v.changes.length > 0 && (
+                  <div className="space-y-1">
+                    {v.changes.map((c, i) => (
+                      <div key={i} className="rounded bg-white px-2 py-1 text-xs">
+                        <span className="font-medium text-gray-700">{c.field}: </span>
+                        {c.oldValue ? (
+                          <>
+                            <span className="text-red-500 line-through">{c.oldValue}</span>
+                            {' → '}
+                            <span className="text-green-600">{c.newValue}</span>
+                          </>
+                        ) : (
+                          <span className="text-green-600">{c.newValue}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+    </div>
   )
 }

@@ -1,11 +1,17 @@
 # Workslip API
 
-.NET API draft for storing, editing and reviewing scanned/digital reports.
+.NET API for receiving, storing and editing digital reports.
 
 The API now has two tracks:
 
 - legacy/specific 4V05 workslip endpoints under `/api/workslips`
 - generic document/report endpoints under `/api/document-types` and `/api/reports`
+
+
+## Architecture 
+- Use onion architecture principles 
+- Always adhere to REST-standards in endpoints
+- If datamodels changes verify affected endpoints still work
 
 ## Stack
 
@@ -73,5 +79,3 @@ The generic model is intentionally not locked to 4V05:
 - `DocumentFiles` links reports to Azure Blob files by storage account, container, blob name and optional blob version.
 - `ReportFields` stores dynamic extracted/corrected fields with confidence, status and source.
 - `ProcessingRuns`, `ReviewIssues`, `Approvals` and `AuditEvents` support OCR/AI processing, human review and auditability.
-
-Use `WorkslipControlChecks` only for 4V05-specific control check structure. Future report types should start as `DocumentTypes` + `ReportFields` and only get special tables if the workflow becomes query-heavy or domain-specific.

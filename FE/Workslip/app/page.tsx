@@ -382,7 +382,14 @@ export default function Home() {
               <span>{stepText}</span>
             </div>
           </div>
-          <div className="doc-title">{selectedCase ? `${selectedCase.caseNumber} · 4V05-arbejdsrapport` : "Dagens sager"}</div>
+          {selectedCase ? (
+            <button className="doc-title doc-title-button" type="button" aria-label="Til sagsliste" onClick={() => returnToCaseList(currentStep)}>
+              <span>{selectedCase.caseNumber} · Tilbage til liste</span>
+              <span className="doc-title-shortcut">Sager</span>
+            </button>
+          ) : (
+            <div className="doc-title">Dagens sager</div>
+          )}
           <div className="progress" aria-hidden="true">
             <span style={{ width: `${progress}%` }} />
           </div>
