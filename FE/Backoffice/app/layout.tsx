@@ -22,7 +22,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 Workslip Backoffice
               </Link>
               <nav className="flex items-center gap-1">
-                <Link
+                {/*<Link
                   href="/rapporter"
                   className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
                 >
@@ -35,7 +35,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 >
                   <Database size={16} />
                   Admin
-                </Link>
+                </Link>*/}
                 <Link
                   href="/opret-dokument"
                   className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
