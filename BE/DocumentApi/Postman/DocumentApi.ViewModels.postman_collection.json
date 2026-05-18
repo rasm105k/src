@@ -37,6 +37,10 @@
     {
       "key": "fieldKey",
       "value": "postman.extra_note"
+    },
+    {
+      "key": "fileId",
+      "value": "90000000-0000-0000-0000-000000000004"
     }
   ],
   "item": [
@@ -609,6 +613,22 @@
         },
         {
           "name": "POST /api/reports/:id/files",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('adds report file', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.id).to.be.a('string');",
+                  "  pm.collectionVariables.set('fileId', json.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -635,6 +655,140 @@
                 "reports",
                 "{{reportId}}",
                 "files"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/reports/:id/files/upload",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('uploads one or more files', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(json[0].id).to.be.a('string');",
+                  "  pm.collectionVariables.set('fileId', json[0].id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "purpose",
+                  "value": "Attachment",
+                  "type": "text"
+                },
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": "C:\\Workspace\\src\\BE\\DocumentApi\\Postman\\upload-sample-a.txt"
+                },
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": "C:\\Workspace\\src\\BE\\DocumentApi\\Postman\\upload-sample-b.txt"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/{{reportId}}/files/upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "{{reportId}}",
+                "files",
+                "upload"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/reports/:id/files/:fileId/content",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('downloads uploaded file content', function () {",
+                  "  pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/{{reportId}}/files/{{fileId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "{{reportId}}",
+                "files",
+                "{{fileId}}",
+                "content"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/reports/:id/files/:fileId",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('removes report file', function () {",
+                  "  pm.expect([204, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/{{reportId}}/files/{{fileId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "{{reportId}}",
+                "files",
+                "{{fileId}}"
               ]
             }
           }

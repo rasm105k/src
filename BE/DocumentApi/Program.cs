@@ -1,6 +1,7 @@
 using DocumentApi.Documents;
 using DocumentApi.Infrastructure;
 using DocumentApi.Workslips;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +13,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));

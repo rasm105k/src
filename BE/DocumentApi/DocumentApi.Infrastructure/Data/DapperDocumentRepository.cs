@@ -323,9 +323,19 @@ public sealed class DapperDocumentRepository(ISqlConnectionFactory connectionFac
         using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         var rows = await connection.QueryAsync<ReportRow>(new CommandDefinition(
             """
-            select r.*, dt.Code as DocumentTypeCode, dt.Name as DocumentTypeName
+            select r.*,
+                   dt.Code as DocumentTypeCode,
+                   dt.Name as DocumentTypeName,
+                   customer.CustomerName
             from dbo.Reports r
             join dbo.DocumentTypes dt on dt.Id = r.DocumentTypeId
+            outer apply (
+                select top 1 coalesce(nullif(rf.CorrectedValueText, ''), nullif(rf.NormalizedValueText, ''), nullif(rf.RawValueText, '')) as CustomerName
+                from dbo.ReportFields rf
+                where rf.ReportId = r.Id
+                  and rf.FieldKey in ('customer.name', 'customerName', 'customer')
+                order by rf.InstanceIndex
+            ) customer
             where (@OrganizationId is null or r.OrganizationId = @OrganizationId)
               and (@DocumentTypeId is null or r.DocumentTypeId = @DocumentTypeId)
               and (@Status is null or r.Status = @Status)
@@ -457,6 +467,66 @@ public sealed class DapperDocumentRepository(ISqlConnectionFactory connectionFac
         await InsertAuditEventAsync(connection, transaction, report.OrganizationId, reportId, created.Id, request.CreatedByUserId, "file_added", "DocumentFile", null, ToJsonNode(created), now, cancellationToken);
         transaction.Commit();
         return created;
+    }
+
+    public async Task<bool?> DeleteFileAsync(Guid reportId, Guid fileId, CancellationToken cancellationToken)
+    {
+        using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        using var transaction = connection.BeginTransaction();
+
+        var report = await connection.QuerySingleOrDefaultAsync<ReportRow>(new CommandDefinition(
+            """
+            select r.*, dt.Code as DocumentTypeCode, dt.Name as DocumentTypeName
+            from dbo.Reports r
+            join dbo.DocumentTypes dt on dt.Id = r.DocumentTypeId
+            where r.Id = @ReportId;
+            """,
+            new { ReportId = reportId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (report is null)
+        {
+            return null;
+        }
+
+        var file = await connection.QuerySingleOrDefaultAsync<DocumentFileRow>(new CommandDefinition(
+            "select * from dbo.DocumentFiles where Id = @FileId and ReportId = @ReportId;",
+            new { ReportId = reportId, FileId = fileId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (file is null)
+        {
+            return false;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            update dbo.Reports
+            set OriginalFileId = case when OriginalFileId = @FileId then null else OriginalFileId end,
+                GeneratedPdfFileId = case when GeneratedPdfFileId = @FileId then null else GeneratedPdfFileId end,
+                UpdatedAt = @UpdatedAt
+            where Id = @ReportId;
+            """,
+            new { ReportId = reportId, FileId = fileId, UpdatedAt = now },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            update dbo.DocumentFiles
+            set ReportId = null
+            where Id = @FileId and ReportId = @ReportId;
+            """,
+            new { ReportId = reportId, FileId = fileId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await InsertAuditEventAsync(connection, transaction, report.OrganizationId, reportId, fileId, null, "file_deleted", "DocumentFile", ToJsonNode(file), null, now, cancellationToken);
+        transaction.Commit();
+        return true;
     }
 
     public async Task<ReportFieldResponse?> UpsertFieldAsync(Guid reportId, ReportFieldRequest request, CancellationToken cancellationToken)
@@ -806,6 +876,7 @@ public sealed class DapperDocumentRepository(ISqlConnectionFactory connectionFac
             row.DocumentTypeCode,
             row.DocumentTypeName,
             row.CustomerId,
+            row.CustomerName,
             row.SiteId,
             row.CaseId,
             row.ReportNumber,
@@ -910,6 +981,7 @@ public sealed class DapperDocumentRepository(ISqlConnectionFactory connectionFac
         public string DocumentTypeCode { get; init; } = "";
         public string DocumentTypeName { get; init; } = "";
         public Guid? CustomerId { get; init; }
+        public string? CustomerName { get; init; }
         public Guid? SiteId { get; init; }
         public Guid? CaseId { get; init; }
         public string? ReportNumber { get; init; }

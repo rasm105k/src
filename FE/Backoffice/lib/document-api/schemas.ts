@@ -44,6 +44,7 @@ export const reportListItemResponseSchema = z.object({
   documentTypeCode: z.string(),
   documentTypeName: z.string(),
   customerId: nullableGuid,
+  customerName: nullableString.optional().default(null),
   siteId: nullableGuid,
   caseId: nullableGuid,
   reportNumber: nullableString,
@@ -103,6 +104,70 @@ export const documentFileViewModelResponseSchema = z.object({
   createdAt: z.string(),
 })
 
+export const documentFileResponseSchema = z.object({
+  id: sqlGuidSchema,
+  organizationId: sqlGuidSchema,
+  reportId: nullableGuid,
+  purpose: z.string(),
+  storageAccountName: z.string(),
+  containerName: z.string(),
+  blobName: z.string(),
+  blobVersionId: nullableString,
+  fileName: z.string(),
+  contentType: z.string(),
+  fileSizeBytes: z.number(),
+  sha256Hash: nullableString,
+  createdAt: z.string(),
+  createdByUserId: nullableGuid,
+})
+
+export const reportFieldResponseSchema = z.object({
+  id: sqlGuidSchema,
+  reportId: sqlGuidSchema,
+  fieldKey: z.string(),
+  instanceIndex: z.number(),
+  label: z.string(),
+  dataType: z.string(),
+  rawValue: nullableString,
+  normalizedValue: nullableString,
+  correctedValue: nullableString,
+  value: nullableJsonObject,
+  confidence: nullableNumber,
+  status: z.string(),
+  source: z.string(),
+  boundingRegions: nullableJsonObject,
+  correctedByUserId: nullableGuid,
+  correctedAt: nullableDateString,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export const reportResponseSchema = z.object({
+  id: sqlGuidSchema,
+  organizationId: sqlGuidSchema,
+  documentTypeId: sqlGuidSchema,
+  documentTypeCode: z.string(),
+  documentTypeName: z.string(),
+  customerId: nullableGuid,
+  siteId: nullableGuid,
+  caseId: nullableGuid,
+  reportNumber: nullableString,
+  title: nullableString,
+  status: z.string(),
+  reviewStatus: z.string(),
+  reviewScore: nullableNumber,
+  originalFileId: nullableGuid,
+  generatedPdfFileId: nullableGuid,
+  payload: nullableJsonObject,
+  files: z.array(documentFileResponseSchema),
+  fields: z.array(reportFieldResponseSchema),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  submittedAt: nullableDateString,
+  approvedAt: nullableDateString,
+  approvedByUserId: nullableGuid,
+})
+
 export const documentViewModelResponseSchema = z.object({
   reportId: nullableGuid,
   organizationId: nullableGuid,
@@ -159,7 +224,11 @@ export type FieldDataType = (typeof FIELD_DATA_TYPES)[number]
 export type DocumentTypeFieldResponse = z.infer<typeof documentTypeFieldResponseSchema>
 export type DocumentTypeResponse = z.infer<typeof documentTypeResponseSchema>
 export type ReportListItemResponse = z.infer<typeof reportListItemResponseSchema>
+export type DocumentFileResponse = z.infer<typeof documentFileResponseSchema>
+export type ReportFieldResponse = z.infer<typeof reportFieldResponseSchema>
+export type ReportResponse = z.infer<typeof reportResponseSchema>
 export type DocumentViewModelResponse = z.infer<typeof documentViewModelResponseSchema>
 export type DocumentSectionViewModelResponse = z.infer<typeof documentSectionViewModelResponseSchema>
 export type DocumentFieldViewModelResponse = z.infer<typeof documentFieldViewModelResponseSchema>
+export type DocumentFileViewModelResponse = z.infer<typeof documentFileViewModelResponseSchema>
 export type DocumentFieldFormValues = z.infer<typeof documentFieldFormSchema>

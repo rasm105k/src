@@ -213,6 +213,7 @@ public sealed record ReportListItemResponse(
     string DocumentTypeCode,
     string DocumentTypeName,
     Guid? CustomerId,
+    string? CustomerName,
     Guid? SiteId,
     Guid? CaseId,
     string? ReportNumber,

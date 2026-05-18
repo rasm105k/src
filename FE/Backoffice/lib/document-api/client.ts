@@ -3,12 +3,18 @@ import {
   documentTypeFieldResponseSchema,
   documentTypeResponseSchema,
   documentViewModelResponseSchema,
+  documentFileResponseSchema,
+  reportFieldResponseSchema,
+  reportResponseSchema,
   reportListItemResponseSchema,
   type DocumentFieldFormValues,
+  type DocumentFileResponse,
   type DocumentTypeFieldResponse,
   type DocumentTypeResponse,
   type DocumentViewModelResponse,
+  type ReportFieldResponse,
   type ReportListItemResponse,
+  type ReportResponse,
 } from './schemas'
 
 const API_PROXY_BASE = '/api/document-api'
@@ -19,6 +25,7 @@ export const documentApiKeys = {
   documentTypeViewModel: (documentTypeId: string | null) =>
     [...documentApiKeys.all, 'document-type-view-model', documentTypeId] as const,
   reports: (filters: ListReportsParams) => [...documentApiKeys.all, 'reports', filters] as const,
+  report: (reportId: string | null) => [...documentApiKeys.all, 'report', reportId] as const,
   reportViewModel: (reportId: string | null) => [...documentApiKeys.all, 'report-view-model', reportId] as const,
 }
 
@@ -54,6 +61,47 @@ export interface DocumentTypeFieldPayload {
 
 export type UpdateDocumentTypeFieldPayload = Omit<DocumentTypeFieldPayload, 'fieldKey'>
 
+export interface UpdateReportPayload {
+  customerId?: string | null
+  siteId?: string | null
+  caseId?: string | null
+  reportNumber?: string | null
+  title?: string | null
+  status?: string | null
+  reviewStatus?: string | null
+  reviewScore?: number | null
+  payload?: Record<string, unknown> | null
+}
+
+export interface DocumentFilePayload {
+  purpose: string
+  storageAccountName: string
+  containerName: string
+  blobName: string
+  blobVersionId?: string | null
+  fileName: string
+  contentType: string
+  fileSizeBytes: number
+  sha256Hash?: string | null
+  createdByUserId?: string | null
+}
+
+export interface ReportFieldPayload {
+  fieldKey: string
+  instanceIndex: number
+  label: string
+  dataType: string
+  rawValue?: string | null
+  normalizedValue?: string | null
+  correctedValue?: string | null
+  value?: Record<string, unknown> | null
+  confidence?: number | null
+  status: string
+  source: string
+  boundingRegions?: Record<string, unknown> | null
+  correctedByUserId?: string | null
+}
+
 export async function listDocumentTypes(): Promise<DocumentTypeResponse[]> {
   return fetchDocumentApi('/document-types', z.array(documentTypeResponseSchema))
 }
@@ -76,6 +124,58 @@ export async function listReports(params: ListReportsParams = {}): Promise<Repor
 
 export async function getReportViewModel(reportId: string): Promise<DocumentViewModelResponse> {
   return fetchDocumentApi(`/reports/${reportId}/view-model`, documentViewModelResponseSchema)
+}
+
+export async function getReport(reportId: string): Promise<ReportResponse> {
+  return fetchDocumentApi(`/reports/${reportId}`, reportResponseSchema)
+}
+
+export async function updateReport(reportId: string, payload: UpdateReportPayload): Promise<ReportResponse> {
+  return fetchDocumentApi(`/reports/${reportId}`, reportResponseSchema, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function addReportFile(reportId: string, payload: DocumentFilePayload): Promise<DocumentFileResponse> {
+  return fetchDocumentApi(`/reports/${reportId}/files`, documentFileResponseSchema, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function uploadReportFiles(
+  reportId: string,
+  files: File[],
+  purpose = 'Attachment',
+): Promise<DocumentFileResponse[]> {
+  const formData = new FormData()
+  formData.set('purpose', purpose)
+  for (const file of files) {
+    formData.append('files', file)
+  }
+
+  return fetchDocumentApi(`/reports/${reportId}/files/upload`, z.array(documentFileResponseSchema), {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export function reportFileContentUrl(reportId: string, fileId: string): string {
+  return `${API_PROXY_BASE}/reports/${reportId}/files/${fileId}/content`
+}
+
+export async function deleteReportFile(reportId: string, fileId: string): Promise<void> {
+  await fetchDocumentApi(`/reports/${reportId}/files/${fileId}`, z.undefined(), {
+    method: 'DELETE',
+  })
+}
+
+export async function upsertReportField(reportId: string, payload: ReportFieldPayload): Promise<ReportFieldResponse> {
+  return fetchDocumentApi(`/reports/${reportId}/fields`, reportFieldResponseSchema, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
 }
 
 export async function addDocumentTypeField(
@@ -126,8 +226,9 @@ async function fetchDocumentApi<T>(
   init: RequestInit = {},
 ): Promise<T> {
   const headers = new Headers(init.headers)
+  const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData
   headers.set('Accept', 'application/json')
-  if (init.body) {
+  if (init.body && !isFormData) {
     headers.set('Content-Type', 'application/json')
   }
 

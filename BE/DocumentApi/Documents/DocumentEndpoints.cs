@@ -202,6 +202,106 @@ public static class DocumentEndpoints
             return created is null ? Results.NotFound() : Results.Created($"/api/reports/{id}/files/{created.Id}", created);
         });
 
+        reports.MapPost("/{id:guid}/files/upload", async (
+            Guid id,
+            HttpRequest request,
+            IDocumentRepository repository,
+            IDocumentFileStorage fileStorage,
+            CancellationToken cancellationToken) =>
+        {
+            if (!request.HasFormContentType)
+            {
+                return Validation([new("files", "Upload must be sent as multipart/form-data.")]);
+            }
+
+            var form = await request.ReadFormAsync(cancellationToken);
+            var files = form.Files.GetFiles("files");
+            if (files.Count == 0)
+            {
+                files = form.Files.ToArray();
+            }
+
+            var errors = ValidateUploadForm(form, files);
+            if (errors.Count > 0)
+            {
+                return Validation(errors);
+            }
+
+            var report = await repository.GetReportAsync(id, cancellationToken);
+            if (report is null)
+            {
+                return Results.NotFound(new { message = $"Report {id} was not found." });
+            }
+
+            var purpose = FirstFormValue(form, "purpose") ?? DocumentFilePurposes.Attachment;
+            var createdByUserId = ParseOptionalGuid(FirstFormValue(form, "createdByUserId"));
+            var created = new List<DocumentFileResponse>();
+
+            foreach (var file in files)
+            {
+                await using var stream = file.OpenReadStream();
+                var stored = await fileStorage.SaveAsync(id, stream, file.FileName, file.ContentType, cancellationToken);
+                var added = await repository.AddFileAsync(id, new DocumentFileRequest(
+                    purpose,
+                    stored.StorageAccountName,
+                    stored.ContainerName,
+                    stored.BlobName,
+                    stored.BlobVersionId,
+                    stored.FileName,
+                    stored.ContentType,
+                    stored.FileSizeBytes,
+                    stored.Sha256Hash,
+                    createdByUserId), cancellationToken);
+
+                if (added is not null)
+                {
+                    created.Add(added);
+                }
+            }
+
+            return Results.Created($"/api/reports/{id}/files", created);
+        });
+
+        reports.MapGet("/{id:guid}/files/{fileId:guid}/content", async (
+            Guid id,
+            Guid fileId,
+            IDocumentRepository repository,
+            IDocumentFileStorage fileStorage,
+            CancellationToken cancellationToken) =>
+        {
+            var report = await repository.GetReportAsync(id, cancellationToken);
+            if (report is null)
+            {
+                return Results.NotFound(new { message = $"Report {id} was not found." });
+            }
+
+            var file = report.Files.FirstOrDefault(candidate => candidate.Id == fileId);
+            if (file is null)
+            {
+                return Results.NotFound(new { message = $"File {fileId} was not found on report {id}." });
+            }
+
+            var content = await fileStorage.OpenReadAsync(file, cancellationToken);
+            return content is null
+                ? Results.NotFound(new { message = $"File content for {fileId} was not found in local storage." })
+                : Results.File(content.Content, content.ContentType, content.FileName, enableRangeProcessing: true);
+        });
+
+        reports.MapDelete("/{id:guid}/files/{fileId:guid}", async (
+            Guid id,
+            Guid fileId,
+            IDocumentRepository repository,
+            CancellationToken cancellationToken) =>
+        {
+            var deleted = await repository.DeleteFileAsync(id, fileId, cancellationToken);
+            return deleted switch
+            {
+                null => Results.NotFound(new { message = $"Report {id} was not found." }),
+                false => Results.NotFound(new { message = $"File {fileId} was not found on report {id}." }),
+                true => Results.NoContent()
+            };
+        });
+
         reports.MapPut("/{id:guid}/fields", async (
             Guid id,
             ReportFieldRequest request,
@@ -225,6 +325,52 @@ public static class DocumentEndpoints
         Results.ValidationProblem(errors
             .GroupBy(error => error.Field)
             .ToDictionary(group => group.Key, group => group.Select(error => error.Message).ToArray()));
+
+    private static IReadOnlyList<DocumentValidationError> ValidateUploadForm(IFormCollection form, IReadOnlyList<IFormFile> files)
+    {
+        var errors = new List<DocumentValidationError>();
+
+        if (files.Count == 0)
+        {
+            errors.Add(new("files", "At least one file is required."));
+        }
+
+        foreach (var file in files)
+        {
+            if (file.Length <= 0)
+            {
+                errors.Add(new("files", $"File '{file.FileName}' is empty."));
+            }
+        }
+
+        var purpose = FirstFormValue(form, "purpose") ?? DocumentFilePurposes.Attachment;
+        if (!DocumentFilePurposes.All.Contains(purpose))
+        {
+            errors.Add(new("purpose", $"purpose must be one of: {string.Join(", ", DocumentFilePurposes.All)}."));
+        }
+
+        var createdByUserId = FirstFormValue(form, "createdByUserId");
+        if (!string.IsNullOrWhiteSpace(createdByUserId) && !Guid.TryParse(createdByUserId, out _))
+        {
+            errors.Add(new("createdByUserId", "createdByUserId must be a valid GUID."));
+        }
+
+        return errors;
+    }
+
+    private static string? FirstFormValue(IFormCollection form, string key)
+    {
+        if (!form.TryGetValue(key, out var values))
+        {
+            return null;
+        }
+
+        var value = values.FirstOrDefault();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static Guid? ParseOptionalGuid(string? value) =>
+        Guid.TryParse(value, out var parsed) ? parsed : null;
 
     private static IResult FieldMutationResult(Guid documentTypeId, string fieldKey, DocumentTypeFieldMutationResult result) =>
         result.Status switch

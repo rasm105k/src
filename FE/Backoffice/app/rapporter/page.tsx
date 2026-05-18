@@ -9,13 +9,12 @@ import type { ReportListItemResponse } from '@/lib/document-api/schemas'
 import {
   ApiErrorNotice,
   EmptyState,
-  formatDate,
   LoadingRows,
-  Metric,
   PageShell,
   Panel,
 } from '@/app/admin/_components/admin-ui'
-import { ReportStatusBadge, ScoreBadge } from './_components/report-ui'
+import { cleanText } from '@/lib/document-api/text'
+import { formatReviewStatus, ReportStatusBadge } from './_components/report-ui'
 
 const ALL = 'all'
 
@@ -36,9 +35,6 @@ export default function ReportsPage() {
   )
   const documentTypes = useMemo(() => uniqueDocumentTypes(reports), [reports])
   const reviewStatuses = useMemo(() => [...new Set(reports.map(report => report.reviewStatus))].sort(), [reports])
-  const needsReviewCount = reports.filter(report => report.reviewStatus === 'NeedsReview').length
-  const approvedCount = reports.filter(report => report.reviewStatus === 'Approved').length
-  const averageScore = averageReviewScore(reports)
 
   return (
     <PageShell>
@@ -46,7 +42,7 @@ export default function ReportsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Rapporter</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Faktiske rapporter fra DocumentApi med reviewstatus, confidence score og link til detailvisning.
+            Faktiske rapporter fra DocumentApi med kunde, dokumenttype og link til detailvisning.
           </p>
         </div>
         <button
@@ -64,13 +60,6 @@ export default function ReportsPage() {
           <ApiErrorNotice error={reportsQuery.error} />
         </div>
       )}
-
-      <div className="mb-4 grid gap-3 sm:grid-cols-4">
-        <Metric label="Rapporter" value={reports.length} />
-        <Metric label="Kræver review" value={needsReviewCount} />
-        <Metric label="Godkendt" value={approvedCount} />
-        <Metric label="Gns. score" value={averageScore === null ? '-' : `${averageScore}%`} />
-      </div>
 
       <Panel
         title="Rapportkø"
@@ -92,9 +81,9 @@ export default function ReportsPage() {
               onChange={event => setReviewStatusFilter(event.target.value)}
               className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm outline-none transition-colors focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             >
-              <option value={ALL}>Alle reviewstatusser</option>
+              <option value={ALL}>Alle gennemgangsstatusser</option>
               {reviewStatuses.map(status => (
-                <option key={status} value={status}>{status}</option>
+                <option key={status} value={status}>{formatReviewStatus(status)}</option>
               ))}
             </select>
             <div className="relative">
@@ -118,10 +107,9 @@ export default function ReportsPage() {
                 <thead>
                   <tr className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                     <th className="px-4 py-3">Rapport</th>
+                    <th className="px-4 py-3">Kunde</th>
                     <th className="px-4 py-3">Dokumenttype</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Review</th>
-                    <th className="px-4 py-3">Score</th>
+                    <th className="px-4 py-3">Gennemgang</th>
                     <th className="px-4 py-3">Opdateret</th>
                     <th className="px-4 py-3 pr-6" />
                   </tr>
@@ -151,28 +139,24 @@ function ReportRow({ report }: { report: ReportListItemResponse }) {
       <td className="px-4 py-3">
         <div className="min-w-0">
           <p className="font-medium text-gray-900">
-            {report.title || report.reportNumber || 'Rapport uden titel'}
+            {cleanText(report.title || report.reportNumber || 'Rapport uden titel')}
           </p>
           <p className="mt-0.5 font-mono text-xs text-gray-400">
-            {report.reportNumber ?? report.id}
+            {cleanText(report.reportNumber ?? report.id)}
           </p>
         </div>
       </td>
-      <td className="px-4 py-3">
-        <p className="text-gray-700">{report.documentTypeName}</p>
-        <p className="mt-0.5 font-mono text-xs text-gray-400">{report.documentTypeCode}</p>
+      <td className="px-4 py-3 text-gray-700">
+        {cleanText(report.customerName ?? 'Ukendt kunde')}
       </td>
       <td className="px-4 py-3">
-        <ReportStatusBadge value={report.status} />
+        <p className="text-gray-700">{cleanText(report.documentTypeName)}</p>
       </td>
       <td className="px-4 py-3">
         <ReportStatusBadge value={report.reviewStatus} />
       </td>
-      <td className="px-4 py-3">
-        <ScoreBadge score={report.reviewScore} />
-      </td>
       <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-500">
-        {formatDate(report.updatedAt)}
+        {formatDateOnly(report.updatedAt)}
       </td>
       <td className="px-4 py-3 pr-6 text-right">
         <Link
@@ -201,6 +185,7 @@ function filterReports(
     const haystack = [
       report.title,
       report.reportNumber,
+      report.customerName,
       report.documentTypeName,
       report.documentTypeCode,
       report.status,
@@ -225,12 +210,10 @@ function uniqueDocumentTypes(reports: ReportListItemResponse[]) {
   return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-function averageReviewScore(reports: ReportListItemResponse[]): number | null {
-  const scores = reports
-    .map(report => report.reviewScore)
-    .filter((score): score is number => score !== null)
-
-  if (scores.length === 0) return null
-
-  return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
+function formatDateOnly(value: string): string {
+  return new Intl.DateTimeFormat('da-DK', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(value))
 }

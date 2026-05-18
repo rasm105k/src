@@ -35,7 +35,7 @@ async function forwardToDocumentApi(request: NextRequest, context: ProxyRouteCon
   if (contentType) headers.set('content-type', contentType)
 
   try {
-    const body = shouldForwardBody(request.method) ? await request.text() : undefined
+    const body = shouldForwardBody(request.method) ? await request.arrayBuffer() : undefined
     const upstreamResponse = await fetch(upstreamUrl, {
       method: request.method,
       headers,
@@ -78,7 +78,9 @@ function buildUpstreamUrl(path: string[], search: string): string {
 function responseHeaders(response: Response): Headers {
   const headers = new Headers()
   const contentType = response.headers.get('content-type')
+  const contentDisposition = response.headers.get('content-disposition')
   if (contentType) headers.set('content-type', contentType)
+  if (contentDisposition) headers.set('content-disposition', contentDisposition)
   return headers
 }
 

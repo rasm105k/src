@@ -16,6 +16,7 @@ Release/
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+dist/
 
 # Environment & secrets
 .env
@@ -36,6 +37,10 @@ Thumbs.db
 # Temp
 __azurite_db*
 .local/
+__pycache__/
+*.pyc
+.venv/
+BE/DocumentApi/UploadedFiles/
 
 # Windows reserved names
 nul

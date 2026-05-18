@@ -1,5 +1,6 @@
 using DocumentApi.Data;
 using DocumentApi.Documents;
+using DocumentApi.Infrastructure.Files;
 using DocumentApi.Migrations;
 using DocumentApi.Workslips;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +12,7 @@ public static class DependencyInjection
     public static IServiceCollection AddDocumentApiInfrastructure(this IServiceCollection services)
     {
         services.AddSingleton<ISqlConnectionFactory, SqlConnectionFactory>();
+        services.AddScoped<IDocumentFileStorage, LocalDocumentFileStorage>();
         services.AddScoped<IDocumentRepository, DapperDocumentRepository>();
         services.AddScoped<IWorkslipRepository, DapperWorkslipRepository>();
         services.AddScoped<SqlMigrationRunner>();
