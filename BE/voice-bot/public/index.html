@@ -3,162 +3,232 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Voice PoC</title>
+<title>AI Lytter</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: -apple-system, system-ui, sans-serif;
-    background: #f5f5f5;
+    background: #f0f4f8;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     min-height: 100dvh;
     padding: 20px;
   }
-  h1 { font-size: 1.4em; margin-bottom: 24px; color: #333; }
+  h1 { font-size: 1.3em; margin: 16px 0; color: #1a202c; }
+  h2 { font-size: 1em; margin: 12px 0 8px; color: #2d3748; }
   #status {
-    font-size: 0.9em;
-    color: #666;
-    margin-bottom: 16px;
+    font-size: 0.85em;
+    color: #718096;
+    margin-bottom: 12px;
     text-align: center;
   }
   #btn {
-    width: 120px;
-    height: 120px;
-    border-radius: 60px;
+    width: 100px;
+    height: 100px;
+    border-radius: 50px;
     border: none;
-    font-size: 1em;
+    font-size: 0.9em;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
-  #btn.idle { background: #22c55e; color: white; }
-  #btn.connecting { background: #f59e0b; color: white; }
-  #btn.connected { background: #ef4444; color: white; }
+  #btn.idle { background: #48bb78; color: white; }
+  #btn.idle:hover { background: #38a169; }
+  #btn.connecting { background: #ecc94b; color: white; }
+  #btn.connected { background: #fc8181; color: white; }
+  #btn.connected:hover { background: #f56565; }
+  .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; margin: 8px 0; }
+  #summarizeBtn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    background: #4299e1;
+    color: white;
+    font-weight: 600;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #summarizeBtn:hover { background: #3182ce; }
+  #summarizeBtn:disabled { background: #cbd5e0; color: #a0aec0; cursor: not-allowed; }
   #transcript {
-    margin-top: 24px;
+    margin-top: 16px;
     width: 100%;
-    max-width: 400px;
+    max-width: 500px;
     background: white;
     border-radius: 12px;
     padding: 16px;
     font-size: 0.85em;
-    line-height: 1.5;
-    min-height: 100px;
-    color: #333;
+    line-height: 1.6;
+    min-height: 80px;
+    color: #2d3748;
     word-wrap: break-word;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
-  .entry { margin-bottom: 8px; }
-  .entry.user { color: #2563eb; }
-  .entry.ai { color: #16a34a; }
-  .entry.partial { font-style: italic; opacity: 0.7; }
+  .entry { margin-bottom: 6px; }
+  .entry.speaker { color: #2b6cb0; font-weight: 500; }
+  #summary {
+    margin-top: 16px;
+    width: 100%;
+    max-width: 500px;
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 0.85em;
+    line-height: 1.6;
+    color: #2d3748;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    display: none;
+  }
+  #summary.visible { display: block; }
+  .summary-field { display: flex; margin-bottom: 6px; }
+  .summary-label { font-weight: 600; color: #4a5568; min-width: 100px; }
+  .summary-value { color: #2d3748; }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: 600;
+  }
+  .tag-urgent { background: #fed7d7; color: #c53030; }
+  .tag-normal { background: #c6f6d5; color: #276749; }
+  .tag-callback { background: #fefcbf; color: #975a16; }
+  #errorMsg {
+    color: #e53e3e;
+    font-size: 0.85em;
+    margin-top: 8px;
+  }
 </style>
 </head>
 <body>
-<h1>AI Voice Test</h1>
-<div id="status">Tryk Start for at tale</div>
-<button id="btn" class="idle">Start</button>
+<h1>AI Lytter</h1>
+<p id="status">Tryk Start for at lytte</p>
+<div class="controls">
+  <button id="btn" class="idle">Start</button>
+  <button id="summarizeBtn" disabled>Generer resume</button>
+</div>
 <div id="transcript"></div>
+<div id="summary"></div>
+<div id="errorMsg"></div>
 
 <script>
 const btn = document.getElementById("btn");
 const statusEl = document.getElementById("status");
-const transcript = document.getElementById("transcript");
+const transcriptEl = document.getElementById("transcript");
+const summarizeBtn = document.getElementById("summarizeBtn");
+const summaryEl = document.getElementById("summary");
+const errorEl = document.getElementById("errorMsg");
 
 let pc = null;
 let dc = null;
-let audioEl = null;
+let audioStream = null;
+let sessionToken = null;
+let fullTranscript = "";
 
-function logEntry(role, text, partial) {
+function logTranscript(text) {
+  if (!text || text.trim().length === 0) return;
   const div = document.createElement("div");
-  div.className = "entry " + role + (partial ? " partial" : "");
-  div.textContent = (role === "user" ? "Du: " : "AI: ") + text;
-  if (partial && transcript.lastChild?.className === div.className) {
-    transcript.lastChild.textContent = div.textContent;
-  } else {
-    transcript.appendChild(div);
-  }
-  transcript.scrollTop = transcript.scrollHeight;
+  div.className = "entry speaker";
+  div.textContent = text;
+  transcriptEl.appendChild(div);
+  transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  fullTranscript += (fullTranscript ? "\n" : "") + text;
+  summarizeBtn.disabled = false;
 }
 
 function setState(state) {
   btn.className = state;
-  if (state === "idle") { btn.textContent = "Start"; statusEl.textContent = "Tryk Start for at tale"; }
-  else if (state === "connecting") { btn.textContent = "..."; statusEl.textContent = "Forbinder..."; }
-  else if (state === "connected") { btn.textContent = "Stop"; statusEl.textContent = "Tal med AI'en"; }
+  switch (state) {
+    case "idle":
+      btn.textContent = "Start";
+      statusEl.textContent = "Tryk Start for at lytte";
+      break;
+    case "connecting":
+      btn.textContent = "...";
+      statusEl.textContent = "Forbinder...";
+      break;
+    case "connected":
+      btn.textContent = "Stop";
+      statusEl.textContent = "Lytter...";
+      break;
+  }
 }
 
-btn.addEventListener("click", async () => {
-  if (pc) {
-    if (dc) dc.close();
-    pc.close();
-    pc = null; dc = null;
-    if (audioEl) { audioEl.pause(); audioEl = null; }
-    setState("idle");
-    transcript.innerHTML = "";
-    return;
-  }
+function showError(msg) {
+  errorEl.textContent = msg;
+  setTimeout(() => { errorEl.textContent = ""; }, 5000);
+}
 
+async function fetchToken() {
+  const res = await fetch("/api/token", { method: "POST" });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error("Token fejl: " + err);
+  }
+  return await res.json();
+}
+
+async function startListening() {
   setState("connecting");
+  errorEl.textContent = "";
+  fullTranscript = "";
+  transcriptEl.innerHTML = "";
+  summaryEl.classList.remove("visible");
+  summaryEl.innerHTML = "";
+  summarizeBtn.disabled = true;
 
   try {
+    const session = await fetchToken();
+    sessionToken = session.token;
+
     pc = new RTCPeerConnection();
 
-    audioEl = document.createElement("audio");
-    audioEl.autoplay = true;
-    pc.ontrack = (e) => { audioEl.srcObject = e.streams[0]; };
-
-    const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
-    pc.addTrack(ms.getTracks()[0]);
+    audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    pc.addTrack(audioStream.getTracks()[0]);
 
     dc = pc.createDataChannel("oai-events");
-    dc.onopen = () => {
-      dc.send(JSON.stringify({
-        type: "session.update",
-        session: {
-          instructions: `Du er en professionel dansk telefondame for en håndværksvirksomhed. Du svarer venligt og hjælpsomt på dansk. Spørg kunden hvad problemet er og om det er akut. Svar på almindelige spørgsmål om priser og tilgængelighed. Hold samtalen kort og professionel.`,
-          turn_detection: { type: "server_vad" },
-          input_audio_transcription: { model: "whisper-1" },
-        },
-      }));
-    };
+    dc.onopen = () => {};
 
     pc.ondatachannel = (e) => {
       const channel = e.channel;
       channel.onmessage = (msg) => {
-        const event = JSON.parse(msg.data);
-        switch (event.type) {
-          case "response.audio_transcript.delta":
-            logEntry("ai", event.delta, true);
-            break;
-          case "response.audio_transcript.done":
-            logEntry("ai", event.transcript, false);
-            break;
-          case "conversation.item.input_audio_transcription.completed":
-            logEntry("user", event.transcript, false);
-            break;
-          case "error":
-            logEntry("ai", "Fejl: " + event.error.message, false);
-            break;
-        }
+        try {
+          const event = JSON.parse(msg.data);
+          if (event.type === "conversation.item.input_audio_transcription.completed") {
+            logTranscript(event.transcript);
+          }
+          if (event.type === "response.created" || event.type === "response.in_progress") {
+            dc.send(JSON.stringify({ type: "response.cancel" }));
+          }
+        } catch (e) {}
       };
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed") {
+        stopListening();
+      }
     };
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    const sdpResponse = await fetch("/session", {
+    const sdpResponse = await fetch("https://api.openai.com/v1/realtime", {
       method: "POST",
       body: offer.sdp,
-      headers: { "Content-Type": "application/sdp" },
+      headers: {
+        Authorization: `Bearer ${session.token}`,
+        "Content-Type": "application/sdp",
+      },
     });
 
     if (!sdpResponse.ok) {
       const err = await sdpResponse.text();
-      throw new Error("Server: " + err);
+      throw new Error("OpenAI: " + err);
     }
 
     await pc.setRemoteDescription({
@@ -169,13 +239,107 @@ btn.addEventListener("click", async () => {
     setState("connected");
   } catch (err) {
     console.error(err);
-    statusEl.textContent = "Fejl: " + err.message;
-    if (dc) dc.close();
-    if (pc) pc.close();
-    pc = null; dc = null;
+    showError(err.message);
+    cleanup();
     setState("idle");
   }
+}
+
+function stopListening() {
+  cleanup();
+  setState("idle");
+  statusEl.textContent = "Lytning stoppet";
+}
+
+function cleanup() {
+  if (dc) { dc.close(); dc = null; }
+  if (pc) { pc.close(); pc = null; }
+  if (audioStream) {
+    audioStream.getTracks().forEach(t => t.stop());
+    audioStream = null;
+  }
+  sessionToken = null;
+}
+
+btn.addEventListener("click", () => {
+  if (pc) {
+    stopListening();
+  } else {
+    startListening();
+  }
 });
+
+summarizeBtn.addEventListener("click", async () => {
+  if (!fullTranscript.trim()) return;
+  summarizeBtn.disabled = true;
+  summarizeBtn.textContent = "Genererer...";
+
+  try {
+    const res = await fetch("/api/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcript: fullTranscript }),
+    });
+
+    if (!res.ok) throw new Error("Resume fejl: " + await res.text());
+
+    const summary = await res.json();
+    displaySummary(summary);
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    summarizeBtn.textContent = "Generer resume";
+    summarizeBtn.disabled = false;
+  }
+});
+
+function displaySummary(s) {
+  summaryEl.innerHTML = "";
+  summaryEl.classList.add("visible");
+
+  const fields = [
+    { label: "Navn", value: s.name || "Ikke nævnt" },
+    { label: "Telefon", value: s.phone || "Ikke nævnt" },
+    { label: "Problem", value: s.problem || "Ikke angivet" },
+    { label: "Adresse", value: s.address || "Ikke nævnt" },
+    { label: "Aftalt", value: s.agreedNextSteps || "Ikke angivet" },
+    { label: "Uklart", value: s.unclearItems || "Intet" },
+  ];
+
+  fields.forEach(f => {
+    const div = document.createElement("div");
+    div.className = "summary-field";
+    div.innerHTML = `<span class="summary-label">${f.label}:</span><span class="summary-value">${f.value}</span>`;
+    summaryEl.appendChild(div);
+  });
+
+  const tags = document.createElement("div");
+  tags.style.marginTop = "8px";
+  tags.style.display = "flex";
+  tags.style.gap = "6px";
+  tags.style.flexWrap = "wrap";
+
+  if (s.urgent) {
+    const t = document.createElement("span");
+    t.className = "tag tag-urgent";
+    t.textContent = "HASTER";
+    tags.appendChild(t);
+  } else {
+    const t = document.createElement("span");
+    t.className = "tag tag-normal";
+    t.textContent = "Haster ikke";
+    tags.appendChild(t);
+  }
+
+  if (s.wantsCallback) {
+    const t = document.createElement("span");
+    t.className = "tag tag-callback";
+    t.textContent = "Ønsker opkald";
+    tags.appendChild(t);
+  }
+
+  summaryEl.appendChild(tags);
+}
 </script>
 </body>
 </html>

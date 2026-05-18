@@ -15,5 +15,6 @@ public interface IDocumentRepository
     Task<ReportResponse?> GetReportAsync(Guid id, CancellationToken cancellationToken);
     Task<ReportResponse?> UpdateReportAsync(Guid id, UpdateReportRequest request, CancellationToken cancellationToken);
     Task<DocumentFileResponse?> AddFileAsync(Guid reportId, DocumentFileRequest request, CancellationToken cancellationToken);
+    Task<bool?> DeleteFileAsync(Guid reportId, Guid fileId, CancellationToken cancellationToken);
     Task<ReportFieldResponse?> UpsertFieldAsync(Guid reportId, ReportFieldRequest request, CancellationToken cancellationToken);
 }

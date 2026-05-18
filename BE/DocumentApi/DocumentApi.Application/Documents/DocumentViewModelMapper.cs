@@ -103,16 +103,35 @@ public static class DocumentViewModelMapper
                 sectionFields));
         }
 
-        var extraFields = reportFieldsByKey
+        var extraFieldsBySection = reportFieldsByKey
             .Where(pair => !fieldsByKey.ContainsKey(pair.Key))
             .SelectMany(pair => pair.Value.Select(ToExtraFieldViewModel))
-            .OrderBy(field => field.Key)
-            .ThenBy(field => field.InstanceIndex)
-            .ToArray();
+            .GroupBy(field => GetFallbackSection(field.Key));
 
-        if (extraFields.Length > 0)
+        foreach (var group in extraFieldsBySection)
         {
-            sections.Add(new DocumentSectionViewModelResponse("extra", "Ekstra felter", int.MaxValue, extraFields));
+            var extraFields = group
+                .OrderBy(field => field.Key)
+                .ThenBy(field => field.InstanceIndex)
+                .ToArray();
+
+            var existingIndex = sections.FindIndex(section => string.Equals(section.Id, group.Key.Id, StringComparison.OrdinalIgnoreCase));
+            if (existingIndex >= 0)
+            {
+                var existing = sections[existingIndex];
+                sections[existingIndex] = existing with
+                {
+                    Fields = existing.Fields
+                        .Concat(extraFields)
+                        .OrderBy(field => field.Order)
+                        .ThenBy(field => field.Key)
+                        .ThenBy(field => field.InstanceIndex)
+                        .ToArray()
+                };
+                continue;
+            }
+
+            sections.Add(new DocumentSectionViewModelResponse(group.Key.Id, group.Key.Title, int.MaxValue, extraFields));
         }
 
         return sections
@@ -166,7 +185,7 @@ public static class DocumentViewModelMapper
             reportField.Label,
             reportField.DataType,
             Required: false,
-            Order: 0,
+            Order: int.MaxValue,
             Options: null,
             value,
             reportField.Confidence,
@@ -240,9 +259,11 @@ public static class DocumentViewModelMapper
         return prefix switch
         {
             "customer" => new("customer", "Kunde"),
+            "issuer" => new("issuer", "Udsteder"),
             "site" => new("site", "Adresse"),
             "case" => new("case", "Sag"),
             "task" => new("task", "Opgave"),
+            "work" => new("work", "Arbejde"),
             "performed" => new("performed", "Udførelse"),
             "technician" => new("technician", "Montør"),
             "signature" => new("signature", "Attestering"),
@@ -258,6 +279,19 @@ public static class DocumentViewModelMapper
             "amount" => new("amount", "Beløb"),
             "labor" => new("labor", "Timer"),
             "next" => new("next", "Næste handling"),
+            "postman" => new("postman", "Demo/import"),
+            "deviation" => new("deviation", "Afvigelse"),
+            "corrective" => new("corrective", "Korrigerende handling"),
+            "room" => new("room", "Rum"),
+            "remarks" => new("remarks", "Bemærkninger"),
+            "instructions" => new("instructions", "Vejledninger"),
+            "authorization" => new("authorization", "Autorisation"),
+            "conclusion" => new("conclusion", "Konklusion"),
+            "checklist" => new("checklist", "Checklistestatus"),
+            "reviewed" => new("reviewed", "Gennemgåede sager"),
+            "guide" => new("guide", "Vejledning"),
+            "setting" => new("setting", "Indstillinger"),
+            "publication" => new("publication", "Publikation"),
             _ => new(prefix, "Øvrige felter")
         };
     }

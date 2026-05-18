@@ -386,7 +386,7 @@ export default function Home() {
               <span className="doc-title-shortcut">Sager</span>
             </button>
           ) : (
-            <div className="doc-title">Dagens sager</div>
+            <div className="doc-title">Overblik</div>
           )}
           <div className="progress" aria-hidden="true">
             <span style={{ width: `${progress}%` }} />

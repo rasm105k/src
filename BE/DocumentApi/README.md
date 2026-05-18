@@ -46,6 +46,9 @@ The API is split into onion-style projects:
 - `GET /api/reports/{id}/view-model`
 - `PATCH /api/reports/{id}`
 - `POST /api/reports/{id}/files`
+- `POST /api/reports/{id}/files/upload`
+- `GET /api/reports/{id}/files/{fileId}/content`
+- `DELETE /api/reports/{id}/files/{fileId}`
 - `PUT /api/reports/{id}/fields`
 
 ### 4V05 workslips
@@ -79,6 +82,14 @@ $env:ConnectionStrings__Workslip = "Server=tcp:<server>.database.windows.net,143
 
 Do not commit real connection strings or secrets.
 
+Local uploaded report files are stored using:
+
+- `DocumentFileStorage:LocalRootPath`
+- `DocumentFileStorage:StorageAccountName`
+- `DocumentFileStorage:ContainerName`
+
+This local file store is for development and demo flows. In Azure, the same `DocumentFiles` metadata maps naturally to Blob Storage.
+
 ## Migrations
 
 Initial schema is in `Migrations/001_init_workslip.sql`.
@@ -111,7 +122,7 @@ The response is intentionally frontend-oriented:
 - If no schema sections exist, fields are grouped by field-key prefix such as `customer`, `site`, `task`, `performed` or `audit`.
 - `fields` includes metadata (`key`, `label`, `fieldType`, `required`, `order`, `options`) and data (`value`, `confidence`, `status`, `source`, `boundingRegions`).
 - Missing required report fields are returned with `status = "Missing"` so the frontend can render them without hardcoding report-specific fields.
-- Unknown extracted fields that are not part of the template are returned in an `extra` section.
+- Unknown extracted fields that are not part of the template are grouped by field-key prefix when possible.
 
 ## Document type field management
 
@@ -121,4 +132,4 @@ Document templates can be changed through the API without frontend code changes:
 - `PATCH /api/document-types/{id}/fields/{fieldKey}` updates label, type, required flag, sort order or options.
 - `DELETE /api/document-types/{id}/fields/{fieldKey}` removes a field from the template.
 
-Existing report field values are not deleted when a template field is removed. They can still appear in the report view model under the `extra` section if extracted data exists for that field key.
+Existing report field values are not deleted when a template field is removed. They can still appear in the report view model under a prefix-based fallback section if extracted data exists for that field key.
