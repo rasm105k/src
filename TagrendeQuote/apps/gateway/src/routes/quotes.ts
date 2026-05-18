@@ -67,14 +67,39 @@ export async function registerQuoteRoutes(app: FastifyInstance, repository: Quot
     })
   })
 
-  app.post('/internal/quotes/:quoteId/verification', async (request, reply) => {
-    const params = z.object({ quoteId: z.string() }).parse(request.params)
-    const verified = verifiedQuoteSchema.parse(request.body)
-    const quote = repository.updateVerified(params.quoteId, verified)
-    if (!quote) {
-      return reply.code(404).send({ message: 'Quote was not found.' })
-    }
+   app.post('/internal/quotes/:quoteId/verification', async (request, reply) => {
+     const params = z.object({ quoteId: z.string() }).parse(request.params)
+     const verified = verifiedQuoteSchema.parse(request.body)
+     const quote = repository.updateVerified(params.quoteId, verified)
+     if (!quote) {
+       return reply.code(404).send({ message: 'Quote was not found.' })
+     }
 
-    return quote
-  })
+     return quote
+   })
+
+    app.patch('/admin/quotes/:quoteId/estimate', async (request, reply) => {
+      const params = z.object({ quoteId: z.string() }).parse(request.params)
+      const updateSchema = z.object({
+        price: z.object({
+          min: z.number().int().positive(),
+          max: z.number().int().positive(),
+          currency: z.string().default('DKK'),
+        }).optional(),
+        facts: z.object({
+          buildingAreaM2: z.number().int().nonnegative().optional(),
+          floors: z.number().int().nonnegative().optional(),
+          estimatedGutterMeters: z.number().int().nonnegative().optional(),
+        }).optional(),
+        confidence: z.number().min(0).max(1).optional(),
+      }).strict()
+
+      const updateData = updateSchema.parse(request.body)
+      const quote = repository.updateEstimate(params.quoteId, updateData)
+      if (!quote) {
+        return reply.code(404).send({ message: 'Quote was not found.' })
+      }
+
+      return quote
+    })
 }

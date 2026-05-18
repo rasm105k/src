@@ -88,18 +88,24 @@ export class TagrendeQuoteWidget {
               <div id="suggestions" class="suggestions"></div>
             </div>
             <div id="estimate"></div>
-            <div id="contact" hidden>
-              <div class="row">
-                <div>
-                  <label for="name">Navn</label>
-                  <input id="name" placeholder="Dit navn" />
-                </div>
-                <div>
-                  <label for="phone">Telefon</label>
-                  <input id="phone" placeholder="+45" />
-                </div>
-              </div>
-            </div>
+             <div id="contact" hidden>
+               <div class="row">
+                 <div>
+                   <label for="name">Navn</label>
+                   <input id="name" placeholder="Dit navn" />
+                 </div>
+                 <div>
+                   <label for="email">Email</label>
+                   <input id="email" placeholder="din@email.dk" type="email" />
+                 </div>
+               </div>
+               <div class="row" style="margin-top: 1rem;">
+                 <div>
+                   <label for="phone">Telefon (valgfri)</label>
+                   <input id="phone" placeholder="+45" />
+                 </div>
+               </div>
+             </div>
             <button id="quote" disabled>Få fast tilbud</button>
             <div id="status"></div>
           </div>
@@ -179,28 +185,29 @@ export class TagrendeQuoteWidget {
     `
   }
 
-  private async requestQuote() {
-    if (!this.selectedAddress || !this.estimate) return
+   private async requestQuote() {
+     if (!this.selectedAddress || !this.estimate) return
 
-    this.quoteButton.disabled = true
-    this.setStatus('Sender til verifikation...')
+     this.quoteButton.disabled = true
+     this.setStatus('Sender til verifikation...')
 
-    try {
-      const response = await this.postJson<QuoteRequest>('/api/quotes/request', {
-        address: this.selectedAddress,
-        estimateId: this.estimate.estimateId,
-        customer: {
-          name: this.nameInput.value.trim(),
-          phone: this.phoneInput.value.trim(),
-        },
-      })
+     try {
+       const response = await this.postJson<QuoteRequest>('/api/quotes/request', {
+         address: this.selectedAddress,
+         estimateId: this.estimate.estimateId,
+         customer: {
+           name: this.nameInput.value.trim(),
+           email: this.emailInput.value.trim(),
+           phone: this.phoneInput.value.trim(),
+         },
+       })
 
-      this.setStatus(`Tak. Tilbuddet er sendt til kontrol. Reference: ${response.quoteId}`)
-    } catch (error) {
-      this.quoteButton.disabled = false
-      this.setStatus(formatQuoteError(error), true)
-    }
-  }
+       this.setStatus(`Tak. Tilbuddet er sendt til kontrol. Reference: ${response.quoteId}`)
+     } catch (error) {
+       this.quoteButton.disabled = false
+       this.setStatus(formatQuoteError(error), true)
+     }
+   }
 
   private async getJson<T>(path: string): Promise<T> {
     const response = await fetch(`${this.apiBaseUrl}${path}`, {
@@ -239,9 +246,13 @@ export class TagrendeQuoteWidget {
     return this.root.querySelector<HTMLInputElement>('#name')!
   }
 
-  private get phoneInput() {
-    return this.root.querySelector<HTMLInputElement>('#phone')!
-  }
+   private get phoneInput() {
+     return this.root.querySelector<HTMLInputElement>('#phone')!
+   }
+
+   private get emailInput() {
+     return this.root.querySelector<HTMLInputElement>('#email')!
+   }
 
   private get quoteButton() {
     return this.root.querySelector<HTMLButtonElement>('#quote')!

@@ -45,18 +45,41 @@ export class QuoteRepository {
     return updated
   }
 
-  updateVerified(quoteId: string, verified: NonNullable<QuoteRecord['verified']>): QuoteRecord | undefined {
-    const quote = this.quotes.get(quoteId)
-    if (!quote) return undefined
+   updateVerified(quoteId: string, verified: NonNullable<QuoteRecord['verified']>): QuoteRecord | undefined {
+     const quote = this.quotes.get(quoteId)
+     if (!quote) return undefined
 
-    const status: QuoteStatus = verified.confidence < 0.82 ? 'needs_review' : 'verified'
-    const updated = {
-      ...quote,
-      status,
-      verified,
-      updatedAt: new Date().toISOString(),
-    }
-    this.quotes.set(quoteId, updated)
-    return updated
-  }
+     const status: QuoteStatus = verified.confidence < 0.82 ? 'needs_review' : 'verified'
+     const updated = {
+       ...quote,
+       status,
+       verified,
+       updatedAt: new Date().toISOString(),
+     }
+     this.quotes.set(quoteId, updated)
+     return updated
+   }
+
+   updateEstimate(quoteId: string, updateData: Partial<Pick<QuoteRecord['estimate'], 'price' | 'facts' | 'confidence'>>): QuoteRecord | undefined {
+     const quote = this.quotes.get(quoteId)
+     if (!quote) return undefined
+
+     const updatedEstimate = {
+       ...quote.estimate,
+       price: updateData.price ?? quote.estimate.price,
+       facts: {
+         ...quote.estimate.facts,
+         ...(updateData.facts ?? {})
+       },
+       confidence: updateData.confidence ?? quote.estimate.confidence,
+     }
+
+     const updated = {
+       ...quote,
+       estimate: updatedEstimate,
+       updatedAt: new Date().toISOString(),
+     }
+     this.quotes.set(quoteId, updated)
+     return updated
+   }
 }
